@@ -34,7 +34,7 @@ struct AdapterPropertyTests {
     // MARK: - Test Configuration
 
     /// Check if Vapor adapter is available
-    private static var isVaporAvailable: Bool {
+    private var isVaporAvailable: Bool {
         #if canImport(NexusVapor)
         return true
         #else
@@ -45,7 +45,7 @@ struct AdapterPropertyTests {
     // MARK: - Generator Helpers
 
     /// Generate a random HTTPRequest for testing
-    private static func generateHTTPRequest(
+    private func generateHTTPRequest(
         method: HTTPRequest.Method = .get,
         path: String = "/",
         headers: [HTTPField] = [],
@@ -66,7 +66,7 @@ struct AdapterPropertyTests {
     }
 
     /// Generate random HTTP headers
-    private static func generateHeaders(count: Int = 3) -> [HTTPField] {
+    private func generateHeaders(count: Int = 3) -> [HTTPField] {
         let headerNames = [
             "X-Request-ID", "X-Custom", "X-Trace-ID",
             "X-Session-ID", "X-Client-Version"
@@ -95,7 +95,7 @@ struct AdapterPropertyTests {
         for statusCode in statusCodes {
             let plug: Plug = { conn in
                 var copy = conn
-                copy.response = HTTPResponse(status: HTTPResponse.Status(statusCode))
+                copy.response = HTTPResponse(status: HTTPResponse.Status(code: statusCode))
                 return copy
             }
 
@@ -104,7 +104,7 @@ struct AdapterPropertyTests {
 
             // Verify status code is correct
             #expect(
-                hbResult.status == HTTPResponse.Status(statusCode),
+                hbResult.status == HTTPResponse.Status(code: statusCode),
                 "Status code \(statusCode) mismatch: expected=\(statusCode), got=\(hbResult.status.code)"
             )
         }
@@ -132,7 +132,7 @@ struct AdapterPropertyTests {
                 var copy = conn
                 copy.response = HTTPResponse(
                     status: .ok,
-                    headerFields: Dictionary(uniqueKeysWithValues: testHeaders.map { ($0.name, $0.value) })
+                    headerFields: HTTPFields(testHeaders)
                 )
                 return copy
             }
@@ -150,9 +150,10 @@ struct AdapterPropertyTests {
                 let expectedValue = header.value
                 let actualValue = hbResult.headers[header.name]
 
+                let nameString = header.name.rawName
                 #expect(
                     actualValue == expectedValue,
-                    "Header value mismatch for \(header.name): expected='\(expectedValue)', got='\(actualValue ?? "nil")'"
+                    "Header value mismatch for \(nameString): expected='\(expectedValue)', got='\(actualValue ?? "nil")'"
                 )
             }
         }
@@ -327,40 +328,28 @@ struct AdapterPropertyTests {
 
     @Test("ADR-006: BeforeSend hooks execute in LIFO order")
     func beforeSendHooksExecuteLIFO() async {
-        actor ExecutionOrder {
-            var order: [Int] = []
-            func append(_ index: Int) { order.append(index) }
-            func get() -> [Int] { order }
-        }
-
         let callbackCount = 5
-
-        let tracker = ExecutionOrder()
+        let orderHeaderName = HTTPField.Name("X-Execution-Order")!
 
         let plug: Plug = { conn in
             var result = conn
-
-            // Register callbacks in order 0, 1, 2, ...
             for i in 0..<callbackCount {
-                result = result.registerBeforeSend { [i] connection in
-                    Task { await tracker.append(i) }
-                    return connection
+                result = result.registerBeforeSend { [i] c in
+                    var copy = c
+                    let existing = copy.response.headerFields[orderHeaderName] ?? ""
+                    copy.response.headerFields[orderHeaderName] = existing.isEmpty ? "\(i)" : "\(existing),\(i)"
+                    return copy
                 }
             }
-
             return result.respond(status: .ok)
         }
 
-        _ = await runHummingbirdPlug(plug)
-        let order = await tracker.get()
-
-        // LIFO means last registered runs first: count-1, count-2, ..., 0
+        let hbResult = await runHummingbirdPlug(plug)
+        let orderString = hbResult.headers[orderHeaderName] ?? ""
+        let order = orderString.split(separator: ",").compactMap { Int($0) }
         let expectedOrder = Array((0..<callbackCount).reversed())
 
-        #expect(
-            order == expectedOrder,
-            "LIFO order mismatch: expected \(expectedOrder), got \(order)"
-        )
+        #expect(order == expectedOrder, "LIFO order mismatch: expected \(expectedOrder), got \(order)")
     }
 
     // MARK: - End-to-End Request/Response Tests
@@ -379,7 +368,7 @@ struct AdapterPropertyTests {
                     status: .ok,
                     headerFields: [
                         HTTPField.Name("X-Method")!: conn.request.method.rawValue,
-                        HTTPField.Name("X-Path")!: conn.request.path,
+                        HTTPField.Name("X-Path")!: conn.request.path ?? "",
                     ]
                 )
 

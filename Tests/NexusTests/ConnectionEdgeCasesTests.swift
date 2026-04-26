@@ -2,6 +2,7 @@ import Testing
 import HTTPTypes
 import Foundation
 @testable import Nexus
+@testable import NexusTest
 
 /// Tests for Connection edge cases and mutation patterns
 @Suite("Connection Edge Cases")
@@ -11,7 +12,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("halted() preserves other fields")
     func haltedPreservesOtherFields() {
-        var conn = TestConnection.make(
+        var conn = Connection.make(
             method: .post,
             path: "/test",
             body: .buffered(Data("test".utf8))
@@ -29,7 +30,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("halted() creates independent copy")
     func haltedCreatesIndependentCopy() {
-        let original = TestConnection.make()
+        let original = Connection.make()
         var halted = original.halted()
 
         #expect(original.isHalted == false)
@@ -44,7 +45,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("assign() overwrites existing key")
     func assignOverwritesExistingKey() {
-        let conn = TestConnection.make()
+        let conn = Connection.make()
         let conn1 = conn.assign(key: "test", value: "first")
         let conn2 = conn1.assign(key: "test", value: "second")
 
@@ -53,7 +54,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("assign() with nil value")
     func assignWithNilValue() {
-        let conn = TestConnection.make()
+        let conn = Connection.make()
         let conn2 = conn.assign(key: "optional", value: nil as String?)
 
         // Nil values should be stored
@@ -67,7 +68,7 @@ struct ConnectionEdgeCasesTests {
             let name: String
         }
 
-        let conn = TestConnection.make()
+        let conn = Connection.make()
         let value = CustomStruct(id: 42, name: "test")
         let conn2 = conn.assign(key: "struct", value: value)
 
@@ -78,7 +79,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("assign() with array values")
     func assignWithArrayValues() {
-        let conn = TestConnection.make()
+        let conn = Connection.make()
         let values = [1, 2, 3]
         let conn2 = conn.assign(key: "array", value: values)
 
@@ -88,7 +89,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("assign() creates independent copy")
     func assignCreatesIndependentCopy() {
-        let original = TestConnection.make()
+        let original = Connection.make()
         var modified = original.assign(key: "test", value: "value")
 
         #expect(original.assigns.isEmpty)
@@ -104,56 +105,58 @@ struct ConnectionEdgeCasesTests {
     @Test("init with empty request body")
     func initWithEmptyRequestBody() {
         let conn = Connection(
-            request: HTTPRequest(method: .get, path: "/"),
+            request: HTTPRequest(method: .get, scheme: "http", authority: "localhost", path: "/"),
             requestBody: .empty
         )
 
-        case let .empty = conn.requestBody
+        if case .empty = conn.requestBody { } else { Issue.record("Expected .empty") }
     }
 
     @Test("init with buffered request body")
     func initWithBufferedRequestBody() {
         let data = Data("test".utf8)
         let conn = Connection(
-            request: HTTPRequest(method: .post, path: "/"),
+            request: HTTPRequest(method: .post, scheme: "http", authority: "localhost", path: "/"),
             requestBody: .buffered(data)
         )
 
-        case let .buffered(retrieved) = conn.requestBody
+        guard case let .buffered(retrieved) = conn.requestBody else {
+            Issue.record("Expected .buffered"); return
+        }
         #expect(retrieved == data)
     }
 
     @Test("init defaults response to 200 OK")
     func initDefaultsResponseToOK() {
-        let conn = Connection(request: HTTPRequest(method: .get, path: "/"))
+        let conn = Connection(request: HTTPRequest(method: .get, scheme: "http", authority: "localhost", path: "/"))
 
         #expect(conn.response.status == .ok)
     }
 
     @Test("init defaults responseBody to empty")
     func initDefaultsResponseBodyToEmpty() {
-        let conn = Connection(request: HTTPRequest(method: .get, path: "/"))
+        let conn = Connection(request: HTTPRequest(method: .get, scheme: "http", authority: "localhost", path: "/"))
 
-        case .empty = conn.responseBody
+        if case .empty = conn.responseBody { } else { Issue.record("Expected .empty") }
     }
 
     @Test("init defaults isHalted to false")
     func initDefaultsIsHaltedToFalse() {
-        let conn = Connection(request: HTTPRequest(method: .get, path: "/"))
+        let conn = Connection(request: HTTPRequest(method: .get, scheme: "http", authority: "localhost", path: "/"))
 
         #expect(conn.isHalted == false)
     }
 
     @Test("init defaults assigns to empty")
     func initDefaultsAssignsToEmpty() {
-        let conn = Connection(request: HTTPRequest(method: .get, path: "/"))
+        let conn = Connection(request: HTTPRequest(method: .get, scheme: "http", authority: "localhost", path: "/"))
 
         #expect(conn.assigns.isEmpty)
     }
 
     @Test("init defaults beforeSend to empty")
     func initDefaultsBeforeSendToEmpty() {
-        let conn = Connection(request: HTTPRequest(method: .get, path: "/"))
+        let conn = Connection(request: HTTPRequest(method: .get, scheme: "http", authority: "localhost", path: "/"))
 
         #expect(conn.beforeSend.isEmpty)
     }
@@ -162,7 +165,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("Connection is a value type")
     func connectionIsValueType() {
-        var conn1 = TestConnection.make()
+        var conn1 = Connection.make()
         conn1 = conn1.assign(key: "test", value: "value")
 
         var conn2 = conn1
@@ -178,7 +181,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("modifying request fields creates new instance")
     func modifyingRequestFields() {
-        var conn = TestConnection.make(method: .get, path: "/old")
+        var conn = Connection.make(method: .get, path: "/old")
         conn.request.path = "/new"
 
         #expect(conn.request.path == "/new")
@@ -186,7 +189,7 @@ struct ConnectionEdgeCasesTests {
 
     @Test("modifying response fields")
     func modifyingResponseFields() {
-        var conn = TestConnection.make()
+        var conn = Connection.make()
         conn.response.status = .created
         conn.response.headerFields = [.contentType: "application/json"]
 
@@ -211,7 +214,7 @@ struct ConnectionEdgeCasesTests {
         }
 
         let actor = TestActor()
-        let conn = TestConnection.make()
+        let conn = Connection.make()
 
         await actor.store(conn)
         let retrieved = await actor.get()

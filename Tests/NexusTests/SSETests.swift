@@ -2,7 +2,7 @@ import Testing
 @testable import Nexus
 import HTTPTypes
 
-@TestSuite("SSE Tests")
+@Suite("SSE Tests")
 struct SSETests {
     @Test("SSEEvent formats correctly")
     func sseEventFormatting() async throws {
@@ -61,6 +61,6 @@ struct SSETests {
 
         #expect(sseConnection.response.headerFields[.contentType] == "text/event-stream; charset=utf-8")
         #expect(sseConnection.response.headerFields[.cacheControl] == "no-cache, no-transform")
-        #expect(sseConnection.response.headerFields[HTTPField("X-Accel-Buffering")!] == "no")
+        #expect(sseConnection.response.headerFields[HTTPField.Name("X-Accel-Buffering")!] == "no")
     }
 }

@@ -32,10 +32,10 @@ struct HTTPGeneratorsTests {
     @Test("HTTP request generator produces complete requests")
     func HTTPRequestGeneratorProducesCompleteRequests() {
         property("generated requests have all required fields") <- forAll { (request: HTTPRequest) in
-            !request.scheme.isEmpty &&
-            !request.authority.isEmpty &&
-            !request.path.isEmpty &&
-            request.path.hasPrefix("/")
+            !(request.scheme?.isEmpty ?? true) &&
+            !(request.authority?.isEmpty ?? true) &&
+            !(request.path?.isEmpty ?? true) &&
+            (request.path?.hasPrefix("/") ?? false)
         }
     }
 
@@ -43,15 +43,15 @@ struct HTTPGeneratorsTests {
     func ConnectionGeneratorCreatesValidConnections() {
         property("generated connections are not halted initially") <- forAll { (conn: Connection) in
             !conn.isHalted &&
-            !conn.request.scheme.isEmpty &&
-            !conn.request.authority.isEmpty
+            !(conn.request.scheme?.isEmpty ?? true) &&
+            !(conn.request.authority?.isEmpty ?? true)
         }
     }
 
     @Test("HTTP field generator produces valid fields")
     func HTTPFieldGeneratorProducesValidFields() {
         property("generated fields have valid names and values") <- forAll { (field: HTTPField) in
-            !field.name.isEmpty &&
+            !field.name.rawName.isEmpty &&
             !field.value.isEmpty &&
             field.value.allSatisfy { $0.isASCII }
         }

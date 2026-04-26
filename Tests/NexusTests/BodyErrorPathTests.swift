@@ -3,7 +3,6 @@ import HTTPTypes
 import Foundation
 @testable import Nexus
 
-/// Tests for RequestBody and ResponseBody error paths and edge cases
 @Suite("RequestBody and ResponseBody Error Paths")
 struct BodyErrorPathTests {
 
@@ -12,15 +11,18 @@ struct BodyErrorPathTests {
     @Test("RequestBody empty case")
     func requestBodyEmpty() {
         let body = RequestBody.empty
-
-        if case .empty = body {
+        if case .empty = body { } else {
+            Issue.record("Expected .empty case")
+        }
     }
 
     @Test("RequestBody buffered with empty data")
     func requestBodyBufferedEmpty() {
         let body = RequestBody.buffered(Data())
-
-        if case let .buffered(data) = body {
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
         #expect(data.isEmpty)
     }
 
@@ -28,8 +30,10 @@ struct BodyErrorPathTests {
     func requestBodyBufferedLarge() {
         let largeData = Data(repeating: 0xFF, count: 10_000_000)
         let body = RequestBody.buffered(largeData)
-
-        if case let .buffered(data) = body {
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
         #expect(data.count == 10_000_000)
     }
 
@@ -44,12 +48,13 @@ struct BodyErrorPathTests {
         }
 
         let body = RequestBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         do {
             for try await _ in retrievedStream {
-                // Should not reach here
                 #expect(Bool(false), "Stream should throw")
             }
         } catch TestError.streamFailed {
@@ -60,7 +65,7 @@ struct BodyErrorPathTests {
     }
 
     @Test("RequestBody stream with multiple chunks")
-    func requestBodyStreamMultipleChunks() async {
+    func requestBodyStreamMultipleChunks() async throws {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             Task {
                 continuation.yield(Data([1, 2, 3]))
@@ -71,8 +76,10 @@ struct BodyErrorPathTests {
         }
 
         let body = RequestBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         var chunks: [[UInt8]] = []
         for try await chunk in retrievedStream {
@@ -86,7 +93,7 @@ struct BodyErrorPathTests {
     }
 
     @Test("RequestBody stream with empty chunks")
-    func requestBodyStreamEmptyChunks() async {
+    func requestBodyStreamEmptyChunks() async throws {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             Task {
                 continuation.yield(Data())
@@ -96,8 +103,10 @@ struct BodyErrorPathTests {
         }
 
         let body = RequestBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         var chunkCount = 0
         for try await chunk in retrievedStream {
@@ -113,15 +122,18 @@ struct BodyErrorPathTests {
     @Test("ResponseBody empty case")
     func responseBodyEmpty() {
         let body = ResponseBody.empty
-
-        if case .empty = body {
+        if case .empty = body { } else {
+            Issue.record("Expected .empty case")
+        }
     }
 
     @Test("ResponseBody buffered with empty data")
     func responseBodyBufferedEmpty() {
         let body = ResponseBody.buffered(Data())
-
-        if case let .buffered(data) = body {
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
         #expect(data.isEmpty)
     }
 
@@ -129,8 +141,10 @@ struct BodyErrorPathTests {
     func responseBodyBufferedLarge() {
         let largeData = Data(repeating: 0xAA, count: 10_000_000)
         let body = ResponseBody.buffered(largeData)
-
-        if case let .buffered(data) = body {
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
         #expect(data.count == 10_000_000)
     }
 
@@ -145,12 +159,13 @@ struct BodyErrorPathTests {
         }
 
         let body = ResponseBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         do {
             for try await _ in retrievedStream {
-                // Should not reach here
                 #expect(Bool(false), "Stream should throw")
             }
         } catch TestError.streamFailed {
@@ -161,7 +176,7 @@ struct BodyErrorPathTests {
     }
 
     @Test("ResponseBody stream with multiple chunks")
-    func responseBodyStreamMultipleChunks() async {
+    func responseBodyStreamMultipleChunks() async throws {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             Task {
                 continuation.yield(Data([10, 20, 30]))
@@ -171,8 +186,10 @@ struct BodyErrorPathTests {
         }
 
         let body = ResponseBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         var chunks: [[UInt8]] = []
         for try await chunk in retrievedStream {
@@ -189,60 +206,61 @@ struct BodyErrorPathTests {
     @Test("ResponseBody string with empty string")
     func responseBodyStringEmpty() {
         let body = ResponseBody.string("")
-
-        if case let .buffered(data) = body {
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
         #expect(data.isEmpty)
     }
 
     @Test("ResponseBody string with ASCII")
     func responseBodyStringASCII() {
         let body = ResponseBody.string("Hello, World!")
-
-        if case let .buffered(data) = body {
-        let string = String(data: data, encoding: .utf8)
-        #expect(string == "Hello, World!")
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
+        #expect(String(data: data, encoding: .utf8) == "Hello, World!")
     }
 
     @Test("ResponseBody string with Unicode")
     func responseBodyStringUnicode() {
         let input = "Hello 世界 🌍"
         let body = ResponseBody.string(input)
-
-        if case let .buffered(data) = body {
-        let string = String(data: data, encoding: .utf8)
-        #expect(string == input)
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
+        #expect(String(data: data, encoding: .utf8) == input)
     }
 
     @Test("ResponseBody string with emoji")
     func responseBodyStringEmoji() {
         let input = "😀😃😄😁😆"
         let body = ResponseBody.string(input)
-
-        if case let .buffered(data) = body {
-        let string = String(data: data, encoding: .utf8)
-        #expect(string == input)
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
+        #expect(String(data: data, encoding: .utf8) == input)
     }
 
     @Test("ResponseBody string with invalid UTF-8 sequence")
     func responseBodyStringInvalidUTF8() {
-        // Note: Data(_: String, encoding:) returns nil on failure
-        // but ResponseBody.string() uses .data(using:) which returns Optional
-        // and defaults to .empty on nil
-
-        // This is tricky to test because Swift strings are always valid UTF-8
-        // Let's test the fallback behavior through the implementation
-
         let body = ResponseBody.string("valid")
-
-        if case .buffered = body {
+        if case .buffered = body { } else {
+            Issue.record("Expected .buffered case")
+        }
     }
 
     @Test("ResponseBody string with very long string")
     func responseBodyStringVeryLong() {
         let longString = String(repeating: "a", count: 1_000_000)
         let body = ResponseBody.string(longString)
-
-        if case let .buffered(data) = body {
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
         #expect(data.count == 1_000_000)
     }
 
@@ -250,10 +268,11 @@ struct BodyErrorPathTests {
     func responseBodyStringSpecialChars() {
         let input = "Line 1\nLine 2\r\nLine 3\tTabbed\u{0}Null"
         let body = ResponseBody.string(input)
-
-        if case let .buffered(data) = body {
-        let string = String(data: data, encoding: .utf8)
-        #expect(string == input)
+        guard case let .buffered(data) = body else {
+            Issue.record("Expected .buffered case")
+            return
+        }
+        #expect(String(data: data, encoding: .utf8) == input)
     }
 
     // MARK: - Sendable Conformance
@@ -272,13 +291,16 @@ struct BodyErrorPathTests {
             }
         }
 
-        let actor = TestActor()
+        let testActor = TestActor()
         let body = RequestBody.buffered(Data("test".utf8))
 
-        await actor.store(body)
-        let retrieved = await actor.get()
+        await testActor.store(body)
+        let retrieved = await testActor.get()
 
-        case let .buffered(data) = retrieved
+        guard let retrieved, case let .buffered(data) = retrieved else {
+            Issue.record("Expected .buffered value")
+            return
+        }
         #expect(String(data: data, encoding: .utf8) == "test")
     }
 
@@ -296,67 +318,70 @@ struct BodyErrorPathTests {
             }
         }
 
-        let actor = TestActor()
+        let testActor = TestActor()
         let body = ResponseBody.string("test")
 
-        await actor.store(body)
-        let retrieved = await actor.get()
+        await testActor.store(body)
+        let retrieved = await testActor.get()
 
-        case let .buffered(data) = retrieved
+        guard let retrieved, case let .buffered(data) = retrieved else {
+            Issue.record("Expected .buffered value")
+            return
+        }
         #expect(String(data: data, encoding: .utf8) == "test")
     }
 
     // MARK: - Stream Cancellation
 
     @Test("RequestBody stream respects cancellation")
-    func requestBodyStreamCancellation() async {
+    func requestBodyStreamCancellation() async throws {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             Task {
                 for i in 0..<100 {
-                    continuation.yield(Data([i]))
-                    try? await Task.sleep(nanoseconds: 10_000_000)  // 0.01s
+                    continuation.yield(Data([UInt8(i & 0xFF)]))
+                    try? await Task.sleep(nanoseconds: 10_000_000)
                 }
                 continuation.finish()
             }
         }
 
         let body = RequestBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         var count = 0
         for try await _ in retrievedStream {
             count += 1
-            if count >= 5 {
-                break  // Simulate early cancellation
-            }
+            if count >= 5 { break }
         }
 
         #expect(count == 5)
     }
 
     @Test("ResponseBody stream respects cancellation")
-    func responseBodyStreamCancellation() async {
+    func responseBodyStreamCancellation() async throws {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             Task {
                 for i in 0..<100 {
-                    continuation.yield(Data([i]))
-                    try? await Task.sleep(nanoseconds: 10_000_000)  // 0.01s
+                    continuation.yield(Data([UInt8(i & 0xFF)]))
+                    try? await Task.sleep(nanoseconds: 10_000_000)
                 }
                 continuation.finish()
             }
         }
 
         let body = ResponseBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         var count = 0
         for try await _ in retrievedStream {
             count += 1
-            if count >= 3 {
-                break  // Simulate early cancellation
-            }
+            if count >= 3 { break }
         }
 
         #expect(count == 3)
@@ -365,13 +390,11 @@ struct BodyErrorPathTests {
     // MARK: - Memory Efficiency
 
     @Test("RequestBody stream uses constant memory")
-    func requestBodyStreamConstantMemory() async {
-        // This test verifies that streaming doesn't buffer all data in memory
+    func requestBodyStreamConstantMemory() async throws {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             Task {
-                // Stream 1000 chunks of 1KB each
                 for _ in 0..<1000 {
-                    var chunk = Data(repeating: UInt8.random(in: 0...255), count: 1024)
+                    let chunk = Data(repeating: UInt8.random(in: 0...255), count: 1024)
                     continuation.yield(chunk)
                 }
                 continuation.finish()
@@ -379,8 +402,10 @@ struct BodyErrorPathTests {
         }
 
         let body = RequestBody.stream(stream)
-
-        if case let .stream(retrievedStream) = body {
+        guard case let .stream(retrievedStream) = body else {
+            Issue.record("Expected .stream case")
+            return
+        }
 
         var chunkCount = 0
         for try await _ in retrievedStream {
@@ -388,6 +413,5 @@ struct BodyErrorPathTests {
         }
 
         #expect(chunkCount == 1000)
-        // If this test passes without OOM, streaming uses constant memory
     }
 }

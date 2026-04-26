@@ -9,7 +9,7 @@ import Vapor
 /// These benchmarks measure adapter overhead compared to raw Vapor to ensure
 /// the Nexus pipeline adds minimal latency (<5% target) while providing
 /// enhanced composability and features.
-@TestSuite("NexusVaporBenchmarks")
+@Suite("NexusVaporBenchmarks")
 struct NexusVaporBenchmarks {
 
     // MARK: - Test Data

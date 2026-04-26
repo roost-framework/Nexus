@@ -1,6 +1,8 @@
 import Testing
 import HTTPTypes
-import Nexus
+import Foundation
+@testable import Nexus
+@testable import NexusTest
 
 @Suite("Connection.make() Convenience Builders")
 struct ConnectionMakeTests {
@@ -22,16 +24,16 @@ struct ConnectionMakeTests {
         let conn = Connection.make(
             method: .post,
             path: "/test",
-            headers: ["X-Custom": "value"],
+            headers: HTTPFields([HTTPField(name: HTTPField.Name("x-custom")!, value: "value")]),
             body: .buffered(data),
             remoteIP: "127.0.0.1",
             assigns: ["userId": "123"]
         )
 
-        #expect(conn.request.method == .post)
+        #expect(conn.request.method == HTTPRequest.Method.post)
         #expect(conn.request.path == "/test")
-        #expect(conn.request.headerFields[.contentType] == "value")
-        #expect(conn.assigns[key: "userId"] as? String == "123")
+        #expect(conn.request.headerFields[HTTPField.Name("x-custom")!] == "value")
+        #expect(conn.assigns["userId"] as? String == "123")
     }
 
     @Test("makeJSON() with string")
@@ -44,7 +46,7 @@ struct ConnectionMakeTests {
 
         #expect(conn.request.method == .post)
         #expect(conn.request.path == "/api/users")
-        #expect(conn.request.headerFields[.contentType] == "application/json")
+        #expect(conn.request.headerFields[.contentType] as String? == "application/json")
     }
 
     @Test("makeJSON() with Encodable object")
@@ -62,7 +64,7 @@ struct ConnectionMakeTests {
 
         #expect(conn.request.method == .post)
         #expect(conn.request.path == "/api/users")
-        #expect(conn.request.headerFields[.contentType] == "application/json")
+        #expect(conn.request.headerFields[.contentType] as String? == "application/json")
     }
 
     @Test("makeJSON() with Encodable and assigns")
@@ -80,7 +82,7 @@ struct ConnectionMakeTests {
         )
 
         #expect(conn.request.method == .post)
-        #expect(conn.assigns[key: "authenticated"] as? String == "true")
+        #expect(conn.assigns["authenticated"] as? String == "true")
     }
 
     @Test("makeForm() with form string")
@@ -93,7 +95,7 @@ struct ConnectionMakeTests {
 
         #expect(conn.request.method == .post)
         #expect(conn.request.path == "/login")
-        #expect(conn.request.headerFields[.contentType] == "application/x-www-form-urlencoded")
+        #expect(conn.request.headerFields[.contentType] as String? == "application/x-www-form-urlencoded")
     }
 
     @Test("makeForm() with fields dictionary")
@@ -105,7 +107,7 @@ struct ConnectionMakeTests {
 
         #expect(conn.request.method == .post)
         #expect(conn.request.path == "/login")
-        #expect(conn.request.headerFields[.contentType] == "application/x-www-form-urlencoded")
+        #expect(conn.request.headerFields[.contentType] as String? == "application/x-www-form-urlencoded")
     }
 
     @Test("makeForm() with fields and assigns")
@@ -118,6 +120,6 @@ struct ConnectionMakeTests {
         )
 
         #expect(conn.request.method == .post)
-        #expect(conn.assigns[key: "loginAttempt"] as? String == "1")
+        #expect(conn.assigns["loginAttempt"] as? String == "1")
     }
 }

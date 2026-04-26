@@ -137,6 +137,17 @@ let package = Package(
                 .product(name: "HTTPTypes", package: "swift-http-types"),
             ]
         ),
+        .testTarget(
+            name: "NexusVaporTests",
+            dependencies: [
+                "Nexus",
+                "NexusRouter",
+                "NexusHummingbird",
+                "NexusVapor",
+                .product(name: "Vapor", package: "vapor"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+            ]
+        ),
         // Temporarily disabled benchmarks due to API updates
         // .testTarget(
         //     name: "NexusVaporBenchmarks",

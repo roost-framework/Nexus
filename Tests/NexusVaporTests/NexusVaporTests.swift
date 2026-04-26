@@ -3,7 +3,7 @@ import Testing
 @testable import NexusVapor
 import HTTPTypes
 
-@TestSuite("NexusVaporTests")
+@Suite("NexusVaporTests")
 struct NexusVaporTests {
     @Test("Placeholder test")
     func placeholder() async throws {

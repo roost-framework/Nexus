@@ -23,7 +23,15 @@ extension HTTPRequest.Method: @retroactive Arbitrary {
 
 // MARK: - HTTP Header Generators
 
-extension HTTPField {
+extension HTTPField: @retroactive Arbitrary {
+    public static var arbitrary: Gen<HTTPField> {
+        arbitraryName.flatMap { name in
+            arbitraryValue.map { value in
+                HTTPField(name: HTTPField.Name(name)!, value: value)
+            }
+        }
+    }
+
     /// Generate valid HTTP header names
     ///
     /// Generates common HTTP headers like "content-type", "authorization", etc.
@@ -57,14 +65,6 @@ extension HTTPField {
         ])
     }
 
-    /// Generate arbitrary HTTP fields
-    public static var arbitrary: Gen<HTTPField> {
-        return arbitraryName.flatMap { name in
-            arbitraryValue.map { value in
-                HTTPField(name: HTTPField.Name(name)!, value: value)
-            }
-        }
-    }
 }
 
 // MARK: - HTTP Request Path Generators
@@ -148,7 +148,7 @@ extension Gen {
 
 // MARK: - HTTP Request Generators
 
-extension HTTPRequest {
+extension HTTPRequest: @retroactive Arbitrary {
     /// Generate arbitrary HTTP requests for property-based testing
     ///
     /// This generator creates complete HTTPRequest objects with:

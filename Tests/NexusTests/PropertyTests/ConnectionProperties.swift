@@ -83,20 +83,3 @@ struct ConnectionProperties {
     }
 }
 
-/// Arbitrary conformance for HTTPRequest to enable property-based testing
-extension HTTPRequest: @retroactive Arbitrary {
-    public static var arbitrary: Gen<HTTPRequest> {
-        return String.arbitrary.suchThat { !$0.isEmpty }.map { authority in
-            HTTPRequest(method: .get, scheme: "https", authority: authority, path: "/")
-        }
-    }
-}
-
-/// Arbitrary conformance for Connection to enable property-based testing
-extension Connection: Arbitrary {
-    public static var arbitrary: Gen<Connection> {
-        return HTTPRequest.arbitrary.map { request in
-            Connection(request: request)
-        }
-    }
-}

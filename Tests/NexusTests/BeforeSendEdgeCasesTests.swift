@@ -1,6 +1,7 @@
 import Testing
 import HTTPTypes
 @testable import Nexus
+@testable import NexusTest
 
 /// Tests for BeforeSend lifecycle hook edge cases
 @Suite("BeforeSend Edge Cases")
@@ -22,15 +23,12 @@ struct BeforeSendEdgeCasesTests {
 
     @Test("registerBeforeSend adds callback without executing")
     func registerBeforeSendAddsCallback() {
-        var executed = false
         let conn = Connection.make()
-
-        let registered = conn.registerBeforeSend { _ in
-            executed = true
-            return $0
+        let registered = conn.registerBeforeSend { c in
+            var copy = c; copy.assigns["_ran"] = true; return copy
         }
-
-        #expect(executed == false)
+        // Callback not yet executed — assigns unchanged
+        #expect(registered.assigns["_ran"] == nil)
         #expect(registered.beforeSend.count == 1)
     }
 
@@ -68,22 +66,28 @@ struct BeforeSendEdgeCasesTests {
 
         let conn = Connection.make()
         let registered = conn
-            .registerBeforeSend { _ in
-                executionOrder.append(1)
-                return $0
+            .registerBeforeSend { c in
+                var copy = c
+                let order = copy.assigns["order"] as? [Int] ?? []
+                copy.assigns["order"] = order + [1]
+                return copy
             }
-            .registerBeforeSend { _ in
-                executionOrder.append(2)
-                return $0
+            .registerBeforeSend { c in
+                var copy = c
+                let order = copy.assigns["order"] as? [Int] ?? []
+                copy.assigns["order"] = order + [2]
+                return copy
             }
-            .registerBeforeSend { _ in
-                executionOrder.append(3)
-                return $0
+            .registerBeforeSend { c in
+                var copy = c
+                let order = copy.assigns["order"] as? [Int] ?? []
+                copy.assigns["order"] = order + [3]
+                return copy
             }
 
-        _ = registered.runBeforeSend()
+        let result = registered.runBeforeSend()
 
-        #expect(executionOrder == [3, 2, 1])
+        #expect(result.assigns["order"] as? [Int] == [3, 2, 1])
     }
 
     @Test("runBeforeSend clears callback array")
@@ -111,19 +115,18 @@ struct BeforeSendEdgeCasesTests {
 
     @Test("runBeforeSend with single callback")
     func runBeforeSendSingleCallback() {
-        var callbackExecuted = false
         let conn = Connection.make()
 
-        let registered = conn.registerBeforeSend { conn in
-            callbackExecuted = true
-            var copy = conn
-            copy.response.status = .init(statusCode: 201)
+        let registered = conn.registerBeforeSend { c in
+            var copy = c
+            copy.response.status = HTTPResponse.Status(code: 201)
+            copy.assigns["_ran"] = true
             return copy
         }
 
         let result = registered.runBeforeSend()
 
-        #expect(callbackExecuted == true)
+        #expect(result.assigns["_ran"] as? Bool == true)
         #expect(result.response.status == .created)
         #expect(result.beforeSend.isEmpty)
     }
@@ -143,7 +146,10 @@ struct BeforeSendEdgeCasesTests {
         let result = registered.runBeforeSend()
 
         #expect(result.response.status == .accepted)
-        case let .buffered(data) = result.responseBody
+        guard case let .buffered(data) = result.responseBody else {
+            Issue.record("Expected .buffered responseBody")
+            return
+        }
         #expect(String(data: data, encoding: .utf8) == "modified")
     }
 
@@ -159,13 +165,11 @@ struct BeforeSendEdgeCasesTests {
             }
             .registerBeforeSend { conn in
                 var copy = conn
-                copy.response.status = .init(statusCode: 201)
+                copy.response.status = HTTPResponse.Status(code: 201)
                 return copy
             }
             .registerBeforeSend { conn in
-                var copy = conn
-                copy.assign(key: "logged", value: true)
-                return copy
+                conn.assign(key: "logged", value: true)
             }
 
         let result = registered.runBeforeSend()
@@ -180,20 +184,19 @@ struct BeforeSendEdgeCasesTests {
 
     @Test("runBeforeSend with halted connection")
     func runBeforeSendWithHaltedConnection() {
-        var callbackExecuted = false
         var conn = Connection.make()
         conn.isHalted = true
 
-        let registered = conn.registerBeforeSend { conn in
-            callbackExecuted = true
-            var copy = conn
+        let registered = conn.registerBeforeSend { c in
+            var copy = c
             copy.response.status = .internalServerError
+            copy.assigns["_ran"] = true
             return copy
         }
 
         let result = registered.runBeforeSend()
 
-        #expect(callbackExecuted == true)
+        #expect(result.assigns["_ran"] as? Bool == true)
         #expect(result.isHalted == true)
         #expect(result.response.status == .internalServerError)
     }
@@ -204,10 +207,8 @@ struct BeforeSendEdgeCasesTests {
     func runBeforeSendCallbackThrows() {
         let conn = Connection.make()
 
-        let registered = conn.registerBeforeSend { _ in
-            // Note: callbacks cannot throw - they return Connection
-            // This test verifies the type system prevents throwing
-            var copy = $0
+        let registered = conn.registerBeforeSend { c in
+            var copy = c
             copy.response.status = .internalServerError
             return copy
         }
@@ -239,7 +240,7 @@ struct BeforeSendEdgeCasesTests {
         // Register Sendable callback
         conn = conn.registerBeforeSend { conn in
             var copy = conn
-            copy.response.status = .init(statusCode: 201)
+            copy.response.status = HTTPResponse.Status(code: 201)
             return copy
         }
 
@@ -253,18 +254,19 @@ struct BeforeSendEdgeCasesTests {
 
     @Test("calling runBeforeSend twice only executes once")
     func runBeforeSendTwice() {
-        var executionCount = 0
         let conn = Connection.make()
 
-        let registered = conn.registerBeforeSend { _ in
-            executionCount += 1
-            return $0
+        let registered = conn.registerBeforeSend { c in
+            var copy = c
+            let count = copy.assigns["count"] as? Int ?? 0
+            copy.assigns["count"] = count + 1
+            return copy
         }
 
         let result1 = registered.runBeforeSend()
         let result2 = result1.runBeforeSend()
 
-        #expect(executionCount == 1)
+        #expect(result1.assigns["count"] as? Int == 1)
         #expect(result2.beforeSend.isEmpty)
     }
 
@@ -279,7 +281,7 @@ struct BeforeSendEdgeCasesTests {
 
         let newRegistration = afterRun.registerBeforeSend { conn in
             var copy = conn
-            copy.response.status = .init(statusCode: 201)
+            copy.response.status = HTTPResponse.Status(code: 201)
             return copy
         }
 
@@ -337,6 +339,8 @@ struct BeforeSendEdgeCasesTests {
         }
 
         let result = registered.runBeforeSend()
-        case .empty = result.responseBody
+        if case .empty = result.responseBody { } else {
+            Issue.record("Expected .empty responseBody")
+        }
     }
 }

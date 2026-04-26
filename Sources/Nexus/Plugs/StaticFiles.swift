@@ -77,7 +77,8 @@ public func staticFiles(_ config: StaticFilesConfig) -> Plug {
             return conn
         }
 
-        let requestPath = conn.request.path ?? "/"
+        let fullPath = conn.request.path ?? "/"
+        let requestPath = String(fullPath.split(separator: "?", maxSplits: 1).first ?? Substring(fullPath))
 
         // Must match the URL prefix
         let prefix = config.at
@@ -123,10 +124,16 @@ public func staticFiles(_ config: StaticFilesConfig) -> Plug {
         // Extension filtering
         let ext = (relativePath as NSString).pathExtension.lowercased()
         if let only = config.only, !only.contains(ext) {
-            return conn
+            var copy = conn
+            copy.response.status = .notFound
+            copy.responseBody = .string("Not Found")
+            return copy
         }
         if let except = config.except, except.contains(ext) {
-            return conn
+            var copy = conn
+            copy.response.status = .notFound
+            copy.responseBody = .string("Not Found")
+            return copy
         }
 
         // Resolve the full filesystem path

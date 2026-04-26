@@ -2,6 +2,7 @@ import Testing
 import HTTPTypes
 import Foundation
 @testable import Nexus
+@testable import NexusTest
 
 /// Tests for session crypto edge cases and error paths
 @Suite("Session Crypto Edge Cases")
@@ -214,9 +215,13 @@ struct SessionCryptoEdgeCasesTests {
         let payload = Data("test".utf8)
 
         let validToken = MessageSigning.sign(payload: payload, secret: secret)
-        let invalidToken = validToken.replacingOccurrences(of: "a", with: "b")
 
-        // Both should return non-nil (valid) or nil (invalid)
+        // Corrupt the last character of the token to invalidate the MAC
+        let corruptedChars = Array(validToken)
+        let lastChar = corruptedChars.last!
+        let replacedChar: Character = lastChar == "A" ? "B" : "A"
+        let invalidToken = String(corruptedChars.dropLast()) + String(replacedChar)
+
         let validResult = MessageSigning.verify(token: validToken, secret: secret)
         let invalidResult = MessageSigning.verify(token: invalidToken, secret: secret)
 
@@ -226,16 +231,19 @@ struct SessionCryptoEdgeCasesTests {
 
     // MARK: - Session Plug Edge Cases
 
+    private func connWithCookie(_ name: String, _ value: String) -> Connection {
+        Connection.make(headers: HTTPFields([HTTPField(name: .cookie, value: "\(name)=\(value)")]))
+    }
+
+    private func hasSetCookie(_ conn: Connection, named name: String) -> Bool {
+        conn.response.headerFields.contains { $0.name == .setCookie && $0.value.hasPrefix("\(name)=") }
+    }
+
     @Test("session plug with missing cookie")
     func sessionPlugMissingCookie() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        let conn = TestConnection.make()
-        let result = try await plug(conn)
-
-        // Should have empty session
+        let plug = sessionPlug(SessionConfig(secret: secret))
+        let result = try await plug(Connection.make())
         let session = result.assigns[Connection.sessionKey] as? [String: String]
         #expect(session == [:])
     }
@@ -243,15 +251,9 @@ struct SessionCryptoEdgeCasesTests {
     @Test("session plug with invalid token")
     func sessionPlugInvalidToken() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = "invalid-token"
-
+        let plug = sessionPlug(SessionConfig(secret: secret))
+        let conn = connWithCookie("_nexus_session", "invalid-token")
         let result = try await plug(conn)
-
-        // Should have empty session
         let session = result.assigns[Connection.sessionKey] as? [String: String]
         #expect(session == [:])
     }
@@ -259,20 +261,12 @@ struct SessionCryptoEdgeCasesTests {
     @Test("session plug with valid token")
     func sessionPlugValidToken() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        // Create a valid session token
+        let plug = sessionPlug(SessionConfig(secret: secret))
         let sessionData = ["user_id": "123", "role": "admin"]
         let jsonData = try JSONEncoder().encode(sessionData)
         let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = token
-
+        let conn = connWithCookie("_nexus_session", token)
         let result = try await plug(conn)
-
-        // Should have decoded session
         let session = result.assigns[Connection.sessionKey] as? [String: String]
         #expect(session?["user_id"] == "123")
         #expect(session?["role"] == "admin")
@@ -281,97 +275,50 @@ struct SessionCryptoEdgeCasesTests {
     @Test("session plug preserves existing session when not touched")
     func sessionPlugPreservesWhenNotTouched() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
+        let plug = sessionPlug(SessionConfig(secret: secret))
         let sessionData = ["key": "value"]
-        let jsonData = try JSONEncoder().encode(sessionData)
-        let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = token
-
+        let token = MessageSigning.sign(payload: try JSONEncoder().encode(sessionData), secret: secret)
+        let conn = connWithCookie("_nexus_session", token)
         let result = try await plug(conn)
-
-        // Run beforeSend - should not add cookie since session wasn't touched
         let afterSend = result.runBeforeSend()
-
-        // Check that cookie was set (or not set based on touched flag)
-        let hasCookie = afterSend.respCookies.contains { $0.name == "_nexus_session" }
-        #expect(!hasCookie)  // Should not set cookie if not touched
+        #expect(!hasSetCookie(afterSend, named: "_nexus_session"))
     }
 
     @Test("session plug sets cookie when touched")
     func sessionPlugSetsCookieWhenTouched() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        var conn = TestConnection.make()
-
-        let result = try await plug(conn)
-
-        // Modify session
-        var modifiedSession = result.assigns[Connection.sessionKey] as? [String: String] ?? [:]
-        modifiedSession["user_id"] = "123"
+        let plug = sessionPlug(SessionConfig(secret: secret))
+        let result = try await plug(Connection.make())
         var result2 = result
+        var modifiedSession = result2.assigns[Connection.sessionKey] as? [String: String] ?? [:]
+        modifiedSession["user_id"] = "123"
         result2.assigns[Connection.sessionKey] = modifiedSession
         result2.assigns[Connection.sessionTouchedKey] = true
-
-        // Run beforeSend
         let afterSend = result2.runBeforeSend()
-
-        // Should have set cookie
-        let cookie = afterSend.respCookies.first { $0.name == "_nexus_session" }
-        #expect(cookie != nil)
+        #expect(hasSetCookie(afterSend, named: "_nexus_session"))
     }
 
     @Test("session plug drops session when requested")
     func sessionPlugDropsSession() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        let sessionData = ["key": "value"]
-        let jsonData = try JSONEncoder().encode(sessionData)
-        let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = token
-
+        let plug = sessionPlug(SessionConfig(secret: secret))
+        let token = MessageSigning.sign(payload: try JSONEncoder().encode(["key": "value"]), secret: secret)
+        let conn = connWithCookie("_nexus_session", token)
         let result = try await plug(conn)
-
-        // Mark session for deletion
         var result2 = result
         result2.assigns[Connection.sessionDropKey] = true
         result2.assigns[Connection.sessionTouchedKey] = true
-
-        // Run beforeSend
         let afterSend = result2.runBeforeSend()
-
-        // Should have deletion cookie
-        let cookie = afterSend.respCookies.first { $0.name == "_nexus_session" }
-        #expect(cookie != nil)
-
-        // Deletion cookies typically have maxAge: 0 or similar
-        // The exact implementation depends on deleteRespCookie
+        #expect(hasSetCookie(afterSend, named: "_nexus_session"))
     }
 
     @Test("session plug with empty session data")
     func sessionPlugEmptySessionData() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        let sessionData: [String: String] = [:]
-        let jsonData = try JSONEncoder().encode(sessionData)
-        let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = token
-
+        let plug = sessionPlug(SessionConfig(secret: secret))
+        let token = MessageSigning.sign(payload: try JSONEncoder().encode([String: String]()), secret: secret)
+        let conn = connWithCookie("_nexus_session", token)
         let result = try await plug(conn)
-
         let session = result.assigns[Connection.sessionKey] as? [String: String]
         #expect(session == [:])
     }
@@ -379,23 +326,12 @@ struct SessionCryptoEdgeCasesTests {
     @Test("session plug with large session data")
     func sessionPlugLargeSessionData() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
-        // Create session with many keys (approaching 4KB cookie limit)
+        let plug = sessionPlug(SessionConfig(secret: secret))
         var sessionData: [String: String] = [:]
-        for i in 0..<100 {
-            sessionData["key_\(i)"] = String(repeating: "x", count: 20)
-        }
-
-        let jsonData = try JSONEncoder().encode(sessionData)
-        let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = token
-
+        for i in 0..<100 { sessionData["key_\(i)"] = String(repeating: "x", count: 20) }
+        let token = MessageSigning.sign(payload: try JSONEncoder().encode(sessionData), secret: secret)
+        let conn = connWithCookie("_nexus_session", token)
         let result = try await plug(conn)
-
         let session = result.assigns[Connection.sessionKey] as? [String: String]
         #expect(session?.count == 100)
     }
@@ -403,9 +339,7 @@ struct SessionCryptoEdgeCasesTests {
     @Test("session plug with special characters in values")
     func sessionPlugSpecialCharacters() async throws {
         let secret = Data(repeating: 0xAA, count: 32)
-        let config = SessionConfig(secret: secret)
-        let plug = sessionPlug(config)
-
+        let plug = sessionPlug(SessionConfig(secret: secret))
         let sessionData = [
             "spaces": "hello world",
             "unicode": "世界",
@@ -413,15 +347,9 @@ struct SessionCryptoEdgeCasesTests {
             "quotes": "\"quoted\"",
             "newlines": "line1\nline2"
         ]
-
-        let jsonData = try JSONEncoder().encode(sessionData)
-        let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["_nexus_session"] = token
-
+        let token = MessageSigning.sign(payload: try JSONEncoder().encode(sessionData), secret: secret)
+        let conn = connWithCookie("_nexus_session", token)
         let result = try await plug(conn)
-
         let session = result.assigns[Connection.sessionKey] as? [String: String]
         #expect(session?["spaces"] == "hello world")
         #expect(session?["unicode"] == "世界")
@@ -444,24 +372,15 @@ struct SessionCryptoEdgeCasesTests {
             sameSite: .strict
         )
         let plug = sessionPlug(config)
-
-        let sessionData = ["key": "value"]
-        let jsonData = try JSONEncoder().encode(sessionData)
-        let token = MessageSigning.sign(payload: jsonData, secret: secret)
-
-        var conn = TestConnection.make()
-        conn.reqCookies["custom_session"] = token
-
-        let result = try await plug(conn)
-
-        // Touch session to trigger cookie set
+        let token = MessageSigning.sign(payload: try JSONEncoder().encode(["key": "value"]), secret: secret)
+        let conn = connWithCookie("custom_session", token)
+        var result = try await plug(conn)
         result.assigns[Connection.sessionTouchedKey] = true
-
         let afterSend = result.runBeforeSend()
-
-        let cookie = afterSend.respCookies.first { $0.name == "custom_session" }
-        #expect(cookie != nil)
-        #expect(cookie?.path == "/api")
-        #expect(cookie?.domain == "example.com")
+        let setCookieValue = afterSend.response.headerFields
+            .first { $0.name == .setCookie && $0.value.hasPrefix("custom_session=") }?.value
+        #expect(setCookieValue != nil)
+        #expect(setCookieValue?.contains("Path=/api") == true)
+        #expect(setCookieValue?.contains("Domain=example.com") == true)
     }
 }
