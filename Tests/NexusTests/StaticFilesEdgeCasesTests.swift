@@ -391,15 +391,15 @@ struct StaticFilesEdgeCasesTests {
 
         #expect(result.response.status == .ok)
 
-        guard case let .stream(stream) = result.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case let .producer(produce) = result.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
-        var totalBytes = 0
-        for try await chunk in stream {
-            totalBytes += chunk.count
-        }
-        #expect(totalBytes == 100_000)
+        let chunks = try await collectProducer(produce)
+        #expect(chunks.reduce(0) { $0 + $1.count } == 100_000)
+        #expect(chunks.count == 98)
+        #expect(chunks.dropLast().allSatisfy { $0.count == 1_024 })
+        #expect(chunks.last?.count == 672)
     }
 
     // MARK: - Defense in Depth

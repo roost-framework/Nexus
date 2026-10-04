@@ -109,12 +109,52 @@ extension NexusHummingbirdAdapter: HTTPResponder {
             responseBody = HummingbirdCore.ResponseBody(
                 asyncSequence: stream.map { ByteBuffer(bytes: $0) }
             )
+        case .producer(let produce):
+            responseBody = HummingbirdCore.ResponseBody { transport in
+                let sink = HummingbirdBodyWriter(base: transport)
+                var writer: any Nexus.ResponseBodyWriter = sink
+                try Task.checkCancellation()
+                try await produce(&writer)
+                try Task.checkCancellation()
+                try await sink.base.finish(nil)
+            }
         }
 
-        return Response(
+        var response = Response(
             status: finalResult.response.status,
             headers: finalResult.response.headerFields,
             body: responseBody
         )
+        let status = finalResult.response.status.code
+        if request.head.method == .head || status < 200 || [204, 205, 304].contains(status) {
+            // Empty transport bodies must not replace representation metadata with a generated zero length.
+            let contentLength: String?
+            switch status {
+            case ..<200, 204: contentLength = nil
+            case 205: contentLength = "0"
+            case 304: contentLength = finalResult.response.headerFields[.contentLength]
+            default:
+                contentLength = finalResult.response.headerFields[.contentLength] ?? response.headers[.contentLength]
+            }
+            response.body = .init()
+            response.headers[.contentLength] = contentLength
+            response.headers[.transferEncoding] = nil
+        }
+        return response
+    }
+}
+
+/// Confined to the response task; the mutable Hummingbird writer never escapes it.
+private final class HummingbirdBodyWriter: Nexus.ResponseBodyWriter {
+    var base: any HummingbirdCore.ResponseBodyWriter
+
+    init(base: any HummingbirdCore.ResponseBodyWriter) {
+        self.base = base
+    }
+
+    func write(_ data: Data) async throws {
+        try Task.checkCancellation()
+        try await base.write(ByteBuffer(bytes: data))
+        try Task.checkCancellation()
     }
 }

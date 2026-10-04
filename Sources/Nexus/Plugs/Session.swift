@@ -92,24 +92,14 @@ public struct SessionConfig: Sendable {
 /// - Returns: A plug that manages cookie-based sessions.
 public func sessionPlug(_ config: SessionConfig) -> Plug {
     { conn in
-        // --- Read phase ---
-        let session: [String: String]
-
-        if let cookieValue = conn.reqCookies[config.cookieName],
-           let payloadData = MessageSigning.verify(token: cookieValue, secret: config.secret),
-           let decoded = try? JSONDecoder().decode(
-               [String: String].self,
-               from: payloadData
-           ) {
-            session = decoded
-        } else {
-            session = [:]
-        }
-
-        var result = conn.assign(key: Connection.sessionKey, value: session)
+        // Fetch once so a nested pipeline cannot discard earlier session changes.
+        let hookKey = "nexus.session.\(config.cookieName)"
+        guard conn.privateData[hookKey] == nil else { return conn }
+        var result = conn.fetchSession(config).putPrivate(hookKey, value: true)
 
         // --- Write phase (beforeSend) ---
         result = result.registerBeforeSend { c in
+            guard c.assigns[Connection.sessionIgnoreKey] as? Bool != true else { return c }
             let touched = c.assigns[Connection.sessionTouchedKey] as? Bool ?? false
             guard touched else { return c }
 

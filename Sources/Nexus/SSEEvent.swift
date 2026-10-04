@@ -4,7 +4,7 @@
 /// multiple `data:` lines. The event is terminated by a blank line (`\n\n`).
 ///
 /// ```swift
-/// writer.write(sseEvent(data: "hello", event: "message"))
+/// try await writer.write(sseEvent(data: "hello", event: "message"))
 /// // Output: "event: message\ndata: hello\n\n"
 /// ```
 ///

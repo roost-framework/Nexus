@@ -1,14 +1,14 @@
 /// Parses a URL-encoded string (e.g. `"a=1&b=hello+world"`) into a dictionary.
 ///
 /// Splits on `&`, then splits each pair on `=` (at most once). Both keys and
-/// values are percent-decoded. For duplicate keys the first value wins,
+/// values are percent-decoded. For duplicate keys the last value wins,
 /// matching Elixir Plug's `fetch_query_params` semantics.
 ///
 /// - Parameters:
 ///   - string: The URL-encoded string to parse.
 ///   - decodePlus: When `true`, `+` is replaced with a space before
 ///     percent-decoding. Set to `true` for `application/x-www-form-urlencoded`
-///     bodies (HTML spec) and `false` for URL query strings.
+///     bodies and URL query strings (as in Plug).
 /// - Returns: A dictionary of decoded key–value pairs.
 func parseURLEncoded(
     _ string: some StringProtocol,
@@ -16,7 +16,7 @@ func parseURLEncoded(
 ) -> [String: String] {
     var params: [String: String] = [:]
     for pair in string.split(separator: "&") {
-        let parts = pair.split(separator: "=", maxSplits: 1)
+        let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
         guard let key = parts.first else { continue }
         var rawKey = String(key)
         var rawValue: String
@@ -31,9 +31,7 @@ func parseURLEncoded(
         }
         rawKey = rawKey.removingPercentEncoding ?? rawKey
         rawValue = rawValue.removingPercentEncoding ?? rawValue
-        if params[rawKey] == nil {
-            params[rawKey] = rawValue
-        }
+        params[rawKey] = rawValue
     }
     return params
 }

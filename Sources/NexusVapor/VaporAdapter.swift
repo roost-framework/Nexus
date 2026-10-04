@@ -73,11 +73,12 @@ import Nexus
 ///
 /// ## Response Body Handling
 ///
-/// All three ``ResponseBody`` cases are supported:
+/// All ``ResponseBody`` cases are supported:
 ///
 /// - ``ResponseBody/empty`` - Returns a response with no body
 /// - ``ResponseBody/buffered(_:)`` - Returns the complete response data
 /// - ``ResponseBody/stream(_:)`` - Streams the response asynchronously
+/// - ``ResponseBody/producer(_:)`` - Runs a lazy producer with awaited writes
 ///
 /// ## Lifecycle Hooks
 ///
@@ -207,26 +208,34 @@ extension NexusVaporAdapter: AsyncMiddleware {
     ///   converted to HTTP 500 responses per ADR-004.
     public func respond(to request: Request, chainingTo next: AsyncResponder) async throws -> Response {
         // 1. Convert Vapor Request → Nexus Connection
-        let nexusRequestBody: Nexus.RequestBody
-        if let bodyData = request.body.data {
-            let data = bodyData.getData(at: 0, length: bodyData.readableBytes)
-            nexusRequestBody = data?.isEmpty ?? true ? .empty : .buffered(Data(data!))
+        let bodyBuffer: ByteBuffer
+        if let collected = request.body.data {
+            guard collected.readableBytes <= maxRequestBodySize else { throw Abort(.payloadTooLarge) }
+            bodyBuffer = collected
         } else {
-            // Collect request body up to max size
-            let bodyBuffer = try await request.body.collect(upTo: maxRequestBodySize)
-            let data = bodyBuffer.getData(at: 0, length: bodyBuffer.readableBytes) ?? Data()
-            nexusRequestBody = data.isEmpty ? .empty : .buffered(data)
+            bodyBuffer = try await request.body.collect(upTo: maxRequestBodySize)
         }
+        let data = Data(bodyBuffer.readableBytesView)
+        let nexusRequestBody: Nexus.RequestBody = data.isEmpty ? .empty : .buffered(data)
 
-        // Build HTTPRequest from Vapor request
+        // Preserve the request target and every header field, including repeated cookies.
+        let uri = request.url
+        let authority: String
+        if let host = uri.host {
+            let bracketed = host.contains(":") && !host.hasPrefix("[") ? "[\(host)]" : host
+            authority = bracketed + (uri.port.map { ":\($0)" } ?? "")
+        } else {
+            authority = request.headers.first(name: .host) ?? "localhost"
+        }
         var httpRequest = HTTPRequest(
             method: request.method.toHTTPRequestMethod,
-            scheme: "http",
-            authority: request.headers.first(name: .host) ?? "localhost",
-            path: request.url.path
+            scheme: uri.scheme ?? "http",
+            authority: authority,
+            path: uri.path + (uri.query.map { "?" + $0 } ?? "")
         )
-        httpRequest.headerFields = request.headers.reduce(into: [:]) { fields, header in
-            fields[HTTPField.Name(header.name)!] = header.value
+        for header in request.headers {
+            guard let name = HTTPField.Name(header.name) else { continue }
+            httpRequest.headerFields.append(HTTPField(name: name, value: header.value))
         }
 
         var connection = Connection(
@@ -255,60 +264,67 @@ extension NexusVaporAdapter: AsyncMiddleware {
         let finalResult = result.runBeforeSend()
 
         // 4. Convert Nexus Connection → Vapor Response
-        let vaporResponse: Response
+        let body: Response.Body
         switch finalResult.responseBody {
         case .empty:
-            vaporResponse = Response(
-                status: HTTPResponseStatus(
-                    statusCode: finalResult.response.status.code,
-                    reasonPhrase: finalResult.response.status.reasonPhrase
-                ),
-                headers: finalResult.response.headerFields.reduce(into: HTTPHeaders()) { headers, field in
-                    headers.replaceOrAdd(name: field.name.rawName, value: field.value)
-                },
-                body: .empty
-            )
-
+            body = .empty
         case .buffered(let data):
-            vaporResponse = Response(
-                status: HTTPResponseStatus(
-                    statusCode: finalResult.response.status.code,
-                    reasonPhrase: finalResult.response.status.reasonPhrase
-                ),
-                headers: finalResult.response.headerFields.reduce(into: HTTPHeaders()) { headers, field in
-                    headers.replaceOrAdd(name: field.name.rawName, value: field.value)
-                },
-                body: .init(data: data)
-            )
-
-        case .stream(let asyncSequence):
-            // Create a response body stream from the async sequence
-            let responseBody = Response.Body(stream: { writer in
-                Task {
-                    do {
-                        for try await chunk in asyncSequence {
-                            var buffer = ByteBufferAllocator().buffer(capacity: chunk.count)
-                            buffer.writeBytes(chunk)
-                            try await writer.write(.buffer(buffer))
-                        }
-                        try await writer.write(.end)
-                    } catch {
-                        // Stream will be closed automatically
-                    }
+            body = .init(data: data)
+        case .stream(let stream):
+            body = .init(managedAsyncStream: { writer in
+                for try await chunk in stream {
+                    try Task.checkCancellation()
+                    try await writer.write(.buffer(ByteBuffer(bytes: chunk)))
                 }
             })
-            vaporResponse = Response(
-                status: HTTPResponseStatus(
-                    statusCode: finalResult.response.status.code,
-                    reasonPhrase: finalResult.response.status.reasonPhrase
-                ),
-                headers: finalResult.response.headerFields.reduce(into: HTTPHeaders()) { headers, field in
-                    headers.replaceOrAdd(name: field.name.rawName, value: field.value)
-                },
-                body: responseBody
-            )
+        case .producer(let produce):
+            body = .init(managedAsyncStream: { transport in
+                var writer: any Nexus.ResponseBodyWriter = VaporBodyWriter(base: transport)
+                try Task.checkCancellation()
+                try await produce(&writer)
+                try Task.checkCancellation()
+            })
         }
+        var headers = HTTPHeaders()
+        for field in finalResult.response.headerFields {
+            headers.add(name: field.name.rawName, value: field.value)
+        }
+        let response = Response(
+            status: HTTPResponseStatus(
+                statusCode: finalResult.response.status.code,
+                reasonPhrase: finalResult.response.status.reasonPhrase
+            ),
+            headers: headers,
+            body: body
+        )
+        let status = finalResult.response.status.code
+        if request.method == .HEAD || status < 200 || [204, 205, 304].contains(status) {
+            // Vapor derives Content-Length from Body; HEAD and 304 describe the selected representation instead.
+            let contentLength: String?
+            switch status {
+            case ..<200, 204: contentLength = nil
+            case 205: contentLength = "0"
+            case 304: contentLength = finalResult.response.headerFields[.contentLength]
+            default:
+                contentLength =
+                    finalResult.response.headerFields[.contentLength]
+                    ?? response.headers.first(name: .contentLength)
+            }
+            response.body = .empty
+            response.headers.remove(name: .contentLength)
+            response.headers.remove(name: .transferEncoding)
+            if let contentLength { response.headers.add(name: .contentLength, value: contentLength) }
+        }
+        return response
+    }
+}
 
-        return vaporResponse
+private struct VaporBodyWriter: Nexus.ResponseBodyWriter {
+    let base: any AsyncBodyStreamWriter
+
+    func write(_ data: Data) async throws {
+        try Task.checkCancellation()
+        try await base.write(.buffer(ByteBuffer(bytes: data)))
+        try Task.checkCancellation()
     }
 }

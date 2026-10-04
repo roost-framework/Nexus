@@ -19,8 +19,8 @@ public enum RequestBody: Sendable {
 /// Represents the body of an HTTP response.
 ///
 /// Use `.empty` when there is no body, `.buffered` when the full body is
-/// available as a `Data` value, and `.stream` when the body is produced
-/// incrementally as an async sequence of `Data` chunks.
+/// available as a `Data` value, `.stream` to consume an existing sequence,
+/// and `.producer` to write chunks with transport backpressure.
 public enum ResponseBody: Sendable {
     /// No response body.
     case empty
@@ -29,7 +29,20 @@ public enum ResponseBody: Sendable {
     case buffered(Data)
 
     /// A streaming response body produced as successive `Data` chunks.
+    ///
+    /// Buffering and producer cancellation are owned by the supplied stream.
+    /// Prefer ``producer(_:)`` for producers that need transport backpressure.
     case stream(AsyncThrowingStream<Data, any Error>)
+
+    /// A lazy producer executed by the adapter while sending the response.
+    ///
+    /// Await each write before producing the next chunk. Returning finishes
+    /// the response; throwing aborts it. The producer is never started for a
+    /// suppressed body (such as HEAD or 204), and Nexus creates no extra task
+    /// or queue. Cancellation is cooperative; write failures propagate to the
+    /// producer. Disconnect detection depends on the transport and may require
+    /// a write, so idle SSE producers should send periodic heartbeat events.
+    case producer(@Sendable (inout any ResponseBodyWriter) async throws -> Void)
 }
 
 // MARK: - Convenience

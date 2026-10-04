@@ -1,0 +1,5 @@
+module CNexusZlib [system] {
+    header "shim.h"
+    link "z"
+    export *
+}

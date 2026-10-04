@@ -55,12 +55,11 @@ struct SSETests {
             )
         )
 
-        let sseConnection = connection.sseEvent { continuation in
-            continuation.finish()
-        }
+        let sseConnection = connection.sseEvent { _ in }
 
         #expect(sseConnection.response.headerFields[.contentType] == "text/event-stream; charset=utf-8")
         #expect(sseConnection.response.headerFields[.cacheControl] == "no-cache, no-transform")
-        #expect(sseConnection.response.headerFields[HTTPField.Name("X-Accel-Buffering")!] == "no")
+        let bufferingHeader = try #require(HTTPField.Name("X-Accel-Buffering"))
+        #expect(sseConnection.response.headerFields[bufferingHeader] == "no")
     }
 }

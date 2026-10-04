@@ -48,10 +48,10 @@ struct FormParamsTests {
         #expect(conn.formParams["city"] == "São Paulo")
     }
 
-    @Test("test_formParams_firstValueWinsForDuplicates")
-    func test_formParams_firstValueWinsForDuplicates() {
+    @Test("test_formParams_lastValueWinsForDuplicates")
+    func test_formParams_lastValueWinsForDuplicates() {
         let conn = makeConnection(body: .buffered(Data("a=1&a=2".utf8)))
-        #expect(conn.formParams["a"] == "1")
+        #expect(conn.formParams["a"] == "2")
     }
 
     @Test("test_formParams_handlesEmptyValue")

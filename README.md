@@ -67,7 +67,7 @@ A composable HTTP middleware pipeline library for Swift, inspired by [Elixir's P
 
 | Component | Technology |
 |-----------|------------|
-| **Language** | Swift 6.1+ |
+| **Language** | Swift 6.0.3+ |
 | **Swift Tools Version** | 6.0 |
 | **Platforms** | macOS 14+, iOS 17+, Linux |
 | **HTTP Primitives** | [swift-http-types](https://github.com/apple/swift-http-types) (Apple) |
@@ -78,9 +78,10 @@ A composable HTTP middleware pipeline library for Swift, inspired by [Elixir's P
 
 ## Prerequisites
 
-- **Swift 6.1** or later. Install via [Xcode 16.3+](https://developer.apple.com/xcode/), [swiftly](https://github.com/swiftlang/swiftly), or the [official Docker image](https://hub.docker.com/_/swift) (`swift:6.1`).
+- **Swift 6.0.3** or later. Install via [Xcode](https://developer.apple.com/xcode/), [swiftly](https://github.com/swiftlang/swiftly), or the [official Docker image](https://hub.docker.com/_/swift) (`swift:6.0`).
 - **macOS 14+** (Sonoma) or **Linux** (Ubuntu 22.04+ recommended).
-- No additional system dependencies are required. The package resolves all Swift dependencies via Swift Package Manager.
+- Compression uses system zlib. Apple SDKs include it; on Debian/Ubuntu install `zlib1g-dev` before building
+  (`apt-get install zlib1g-dev`). Swift Package Manager resolves the Swift dependencies.
 
 ## Getting Started
 
@@ -90,7 +91,7 @@ Add Nexus to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Spectro-ORM/Nexus.git", from: "1.0.0"),
+    .package(url: "https://github.com/Spectro-ORM/Nexus.git", from: "2.0.0"),
 ]
 ```
 
@@ -164,7 +165,7 @@ Nexus draws directly from Elixir's Plug library. The core ideas are:
 
 ### Package Targets
 
-Nexus ships as a single Swift package with four library targets. Import only what you need:
+Nexus ships as a single Swift package with five library targets. Import only what you need:
 
 ```
                   ┌──────────────────────┐
@@ -195,10 +196,11 @@ Nexus ships as a single Swift package with four library targets. Import only wha
 
 | Target | Description | External Dependencies |
 |--------|-------------|----------------------|
-| **Nexus** | Core. `Connection`, `Plug` typealias, `RequestBody`/`ResponseBody`, built-in plugs, JSON/form/query/cookie helpers. | `swift-http-types` only |
+| **Nexus** | Core. `Connection`, `Plug` typealias, `RequestBody`/`ResponseBody`, built-in plugs, JSON/form/query/cookie helpers. | `swift-http-types`, `swift-metrics`, system zlib, `swift-crypto` on Linux |
 | **NexusRouter** | Result-builder HTTP router with path parameters, wildcards, scoped middleware, sub-router forwarding, and WebSocket route builder. | `Nexus` |
 | **NexusHummingbird** | Bridges Nexus pipelines to Hummingbird 2's `HTTPResponder` protocol. Includes WebSocket upgrade adapter. | `Nexus` + `NexusRouter` + `Hummingbird` + `HummingbirdWebSocket` |
-| **NexusTest** | `TestConnection` builders for constructing `Connection` values in tests without boilerplate. | `Nexus` + `swift-http-types` |
+| **NexusVapor** | Bridges Nexus pipelines to Vapor 4's `AsyncMiddleware` protocol. Includes WebSocket route registration. | `Nexus` + `NexusRouter` + `Vapor` |
+| **NexusTest** | `TestConnection` builders and HTTP property generators for tests. | `Nexus` + `swift-http-types` + `SwiftCheck` |
 
 ### Directory Structure
 
@@ -209,6 +211,7 @@ swift-nexus/
 │   │   ├── Connection.swift            # The Connection value type
 │   │   ├── Plug.swift                  # Plug typealias + pipe/pipeline composition
 │   │   ├── Body.swift                  # RequestBody / ResponseBody enums
+│   │   ├── ResponseBodyWriter.swift    # Awaited transport writes for response producers
 │   │   ├── ConfigurablePlug.swift      # Two-phase plug protocol
 │   │   ├── NexusHTTPError.swift        # NexusHTTPError + rescueErrors wrapper
 │   │   ├── JSONValue.swift             # Dynamic JSON access wrapper
@@ -259,12 +262,17 @@ swift-nexus/
 │   │   ├── HummingbirdAdapter.swift    # HTTPResponder implementation
 │   │   ├── NexusRequestContext.swift   # Request context with remote IP
 │   │   └── WebSocketAdapter.swift      # WebSocket upgrade bridge
+│   ├── NexusVapor/                     # Vapor adapter target
+│   │   ├── VaporAdapter.swift          # AsyncMiddleware implementation
+│   │   └── WebSocketAdapter.swift      # WebSocket route registration
 │   └── NexusTest/                      # Test helper target
 │       └── TestConnection.swift        # Connection builders for tests
 ├── Tests/
-│   ├── NexusTests/                     # Core tests (~15 files)
-│   ├── NexusRouterTests/               # Router tests (~6 files)
-│   └── NexusHummingbirdTests/          # Adapter integration tests
+│   ├── NexusTests/                     # Core and property tests
+│   ├── NexusRouterTests/               # Router tests
+│   ├── NexusHummingbirdTests/          # Hummingbird integration tests
+│   ├── NexusVaporTests/                # Vapor integration tests
+│   └── NexusStreamingTests/            # Live TCP tests for both adapters
 ├── Docs/
 │   ├── ADR/                            # Architecture Decision Records
 │   │   ├── ADR-001.md                  # swift-http-types over custom primitives
@@ -272,13 +280,15 @@ swift-nexus/
 │   │   ├── ADR-003.md                  # Plug as typealias, not protocol
 │   │   ├── ADR-004.md                  # Throws vs halting error contract
 │   │   ├── ADR-005.md                  # Three-target package layout
-│   │   └── ADR-006.md                  # Lifecycle hooks + ConfigurablePlug
+│   │   ├── ADR-006.md                  # Lifecycle hooks + ConfigurablePlug
+│   │   ├── ADR-007.md                  # Connection parity and HTTP semantics
+│   │   └── ADR-008.md                  # Demand-driven response producers
 │   └── migration-journal.md            # Hummingbird-to-Nexus porting notes
 ├── .github/workflows/ci.yml           # GitHub Actions CI
 ├── Package.swift                       # Swift package manifest
 ├── CONTRIBUTING.md                     # Contribution guidelines
 ├── .swift-format                       # swift-format configuration
-└── .swift-version                      # 6.3.0
+└── .swift-version                      # 6.0.3
 ```
 
 ### Core Concepts
@@ -292,7 +302,7 @@ The `Connection` is the single value that flows through every plug in a pipeline
 | `request` | `HTTPRequest` | The incoming HTTP request (method, path, headers, scheme, authority). |
 | `requestBody` | `RequestBody` | The request body: `.empty`, `.buffered(Data)`, or `.stream(AsyncThrowingStream)`. |
 | `response` | `HTTPResponse` | The response being assembled. Defaults to `200 OK`. |
-| `responseBody` | `ResponseBody` | The response body: `.empty`, `.buffered(Data)`, or `.stream(AsyncThrowingStream)`. |
+| `responseBody` | `ResponseBody` | The response body: `.empty`, `.buffered(Data)`, `.stream(AsyncThrowingStream)`, or `.producer` with awaited writes. |
 | `isHalted` | `Bool` | When `true`, downstream plugs in the pipeline are skipped. |
 | `assigns` | `[String: any Sendable]` | Arbitrary key-value store for passing data between plugs. |
 | `beforeSend` | `[@Sendable (Connection) -> Connection]` | Lifecycle callbacks invoked (LIFO) before the response is sent. |
@@ -316,7 +326,8 @@ let logger: Plug = { conn in
 
 #### RequestBody / ResponseBody
 
-Both are enums with three cases, keeping the "no body" / "full body" / "streaming body" distinction explicit:
+Both enums distinguish absent, buffered, and streaming bodies. Responses also support lazy producers
+that write directly to the transport:
 
 ```swift
 public enum RequestBody: Sendable {
@@ -329,6 +340,7 @@ public enum ResponseBody: Sendable {
     case empty
     case buffered(Data)
     case stream(AsyncThrowingStream<Data, any Error>)
+    case producer(@Sendable (inout any ResponseBodyWriter) async throws -> Void)
 }
 ```
 
@@ -553,7 +565,9 @@ POST("/users") { conn in
 
 #### Query Parameters
 
-Parsed from the URL on each access. First value wins for duplicate keys:
+Parsed from the URL on each access using form encoding: `+` becomes a space and the last value wins for duplicate
+keys, matching Plug. Use `queryParameters` to preserve every value. `parameters` combines query, parsed body,
+and path parameters, with path values taking precedence over body values, then query values.
 
 ```swift
 // GET /search?q=swift&page=2
@@ -643,31 +657,43 @@ let scheme = conn.scheme                       // String? ("https", "http")
 GET("/stream") { conn in
     conn.sendChunked { writer in
         for i in 1...5 {
-            writer.write("chunk \(i)\n")
+            try await writer.write("chunk \(i)\n")
             try await Task.sleep(for: .seconds(1))
         }
-        writer.finish()
     }
 }
 ```
 
 #### Server-Sent Events
 
-Use `sseEvent(data:event:id:retry:)` to format SSE strings:
+Use `Connection.sseEvent` to configure the response and write typed events:
 
 ```swift
 GET("/events") { conn in
-    conn
-        .putRespContentType("text/event-stream")
-        .sendChunked { writer in
-            for i in 1...10 {
-                writer.write(sseEvent(data: "tick \(i)", event: "heartbeat", id: "\(i)"))
-                try await Task.sleep(for: .seconds(1))
-            }
-            writer.finish()
+    conn.sseEvent { writer in
+        for i in 1...10 {
+            try await writer.write(SSEEvent(data: "tick \(i)", event: "heartbeat", id: "\(i)"))
+            try await Task.sleep(for: .seconds(1))
         }
+    }
 }
 ```
+
+Both helpers return a halted connection with a lazy `ResponseBody.producer`. The adapter runs the
+producer only while delivering a body; HEAD and bodyless statuses never start it. Await each write
+before producing another chunk. Nexus adds no queue or background producer task. Returning completes
+the response automatically; throwing aborts it. Keep resource cleanup in `defer`.
+
+Transport writes and task cancellation can stop a producer. Immediate disconnect notification while
+the producer is idle is not guaranteed: send periodic SSE heartbeat comments with
+`try await writer.write(": heartbeat\n\n")`, and let write failures propagate. The transport and OS
+retain their own bounded buffers; awaiting a write does not mean the client has processed the bytes.
+
+**Migration:** chunked writes now require `try await`. Remove `writer.finish()` and replace
+`finish(throwing:)` with `throw`. SSE closures now receive a writer: replace continuation `yield(event)`
+with `try await writer.write(event)` and remove surrounding `Task` creation. Exhaustive `ResponseBody`
+switches must handle `.producer`. Existing `.stream(AsyncThrowingStream)` remains supported, with its
+buffering and producer lifecycle still managed by the caller.
 
 ### File Serving
 
@@ -679,6 +705,10 @@ GET("/download/:filename") { conn in
     return try conn.sendFile(path: "/var/www/files/\(filename)")
 }
 ```
+
+Files open when body delivery starts. Each read follows the previous awaited write, and the file closes
+on completion or failure. A file that disappears or becomes unreadable after response preparation causes
+a stream failure. `chunkSize` must be positive.
 
 > **Warning:** `sendFile` does not validate against directory traversal attacks. Always sanitize user-provided paths before passing them to this method. For serving an entire directory safely, use `staticFiles` instead.
 
@@ -752,9 +782,16 @@ POST("/logout") { conn in
 | Method | Description |
 |--------|-------------|
 | `getSession(_:)` | Read a value. Returns `nil` if not present. |
+| `getSession()` / `getSession(_:default:)` | Read all values or supply a fallback for a missing key. |
 | `putSession(key:value:)` | Write a key-value pair. Returns a new connection. |
 | `deleteSession(_:)` | Remove a single key. Returns a new connection. |
 | `clearSession()` | Remove all data and mark the cookie for deletion. |
+| `clearSession(drop: false)` | Remove all data while retaining an empty session cookie. |
+| `renewSession()` | Reissue the cookie with the current data. |
+| `configureSession(renew:drop:ignore:)` | Control persistence; when combined, renew takes precedence over drop, then ignore. |
+
+Repeated session fetches and repeated use of the same session plug preserve in-request changes and register
+one persistence hook. Cookie renewal reissues signed data; it does not invalidate previously issued cookies.
 
 #### MessageSigning
 
@@ -1171,6 +1208,8 @@ The `Docs/ADR/` directory contains Architecture Decision Records documenting key
 | [ADR-004](Docs/ADR/ADR-004.md) | Throws vs halting | HTTP errors halt; infrastructure failures throw. Clear separation of intentional responses from unexpected failures. |
 | [ADR-005](Docs/ADR/ADR-005.md) | Three-target layout | One repo, three library targets. Consumers only pull dependencies they use. |
 | [ADR-006](Docs/ADR/ADR-006.md) | Lifecycle hooks + ConfigurablePlug | `beforeSend` callbacks for final-response modification. `ConfigurablePlug` protocol for two-phase init/call. |
+| [ADR-007](Docs/ADR/ADR-007.md) | Connection parity and HTTP semantics | Parameter precedence, session persistence, zlib compression, and adapter behavior. |
+| [ADR-008](Docs/ADR/ADR-008.md) | Response producers follow transport demand | Lazy producers, awaited writes, automatic completion, and explicit disconnect limits. |
 
 Consult these before changing API shape or introducing new architectural patterns.
 

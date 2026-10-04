@@ -42,16 +42,25 @@ let package = Package(
             from: "2.0.0"
         ),
         .package(
+            url: "https://github.com/apple/swift-nio.git",
+            from: "2.77.0"
+        ),
+        .package(
             url: "https://github.com/typelift/SwiftCheck.git",
             from: "0.12.0"
         ),
     ],
     targets: [
+        .systemLibrary(
+            name: "CNexusZlib",
+            providers: [.apt(["zlib1g-dev"]), .brew(["zlib"])]
+        ),
         // MARK: Core
 
         .target(
             name: "Nexus",
             dependencies: [
+                "CNexusZlib",
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(
                     name: "Crypto",
@@ -110,12 +119,14 @@ let package = Package(
         .testTarget(
             name: "NexusTests",
             dependencies: [
+                "CNexusZlib",
                 "Nexus",
                 "NexusTest",
                 "NexusHummingbird",
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "SwiftCheck", package: "SwiftCheck"),
-            ]
+            ],
+            exclude: ["COVERAGE_IMPROVEMENTS.md"]
         ),
         .testTarget(
             name: "NexusRouterTests",
@@ -146,6 +157,24 @@ let package = Package(
                 "NexusVapor",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
+            ],
+            exclude: ["README.md", "INTEGRATION_TEST_SUMMARY.md"]
+        ),
+        // MARK: Streaming Transport Tests
+        .testTarget(
+            name: "NexusStreamingTests",
+            dependencies: [
+                "Nexus",
+                "NexusHummingbird",
+                "NexusVapor",
+                .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+                .product(name: "Vapor", package: "vapor"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
             ]
         ),
         // Temporarily disabled benchmarks due to API updates

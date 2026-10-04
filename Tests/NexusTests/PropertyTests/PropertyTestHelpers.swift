@@ -1,6 +1,7 @@
-import Testing
-import SwiftCheck
 import Foundation
+import Testing
+
+@testable import SwiftCheck
 
 /// Property test helpers that bridge SwiftCheck with Swift Testing framework.
 ///
@@ -13,9 +14,9 @@ import Foundation
 /// struct MyProperties {
 ///     @Test("array reversal property")
 ///     func arrayReversalProperty() {
-///         property("reversing twice returns original") <- forAll { (xs: [Int]) in
+///         assertProperty(forAll { (xs: [Int]) in
 ///             xs.reversed().reversed() == xs
-///         }
+///         })
 ///     }
 /// }
 /// ```
@@ -55,24 +56,24 @@ extension Gen {
 /// Custom test configuration for property-based tests
 public struct PropertyTestConfig: Sendable {
     public let maxTestCases: Int
-    public let maxShrinkCount: Int
+    public let maxDiscardedTestCases: Int
     public let verbose: Bool
 
     public static let `default` = PropertyTestConfig(
         maxTestCases: 100,
-        maxShrinkCount: 1000,
+        maxDiscardedTestCases: 1000,
         verbose: false
     )
 
     public static let thorough = PropertyTestConfig(
         maxTestCases: 1000,
-        maxShrinkCount: 1000,
+        maxDiscardedTestCases: 1000,
         verbose: true
     )
 
     public static let quick = PropertyTestConfig(
         maxTestCases: 50,
-        maxShrinkCount: 100,
+        maxDiscardedTestCases: 100,
         verbose: false
     )
 }
@@ -81,16 +82,20 @@ public struct PropertyTestConfig: Sendable {
 ///
 /// - Parameters:
 ///   - property: SwiftCheck property to test
-///   - config: Test configuration (currently unused, kept for API compatibility)
-///   - file: Source file for failure reporting
-///   - line: Source line for failure reporting
+///   - config: Successful-case and discard limits, plus verbose output control.
+///   - sourceLocation: Call site for failure reporting.
 public func assertProperty(
     _ property: Property,
     config: PropertyTestConfig = .default,
-    file: StaticString = #file,
-    line: UInt = #line
+    sourceLocation: SourceLocation = #_sourceLocation
 ) {
-    // SwiftCheck properties run automatically when tested
-    // The property function handles test case generation and shrinking
-    // This is a placeholder for future integration enhancements
+    // SwiftCheck 0.12's public assertion API uses XCTest. Its result API is internal;
+    // keep test-only access here so every unsuccessful outcome becomes a Swift Testing issue.
+    let arguments = CheckerArguments(
+        maxAllowableSuccessfulTests: config.maxTestCases,
+        maxAllowableDiscardedTests: config.maxDiscardedTestCases
+    )
+    let result = quickCheckWithResult(arguments, config.verbose ? property.verbose : property)
+    if case .success = result { return }
+    Issue.record("SwiftCheck did not succeed: \(String(describing: result))", sourceLocation: sourceLocation)
 }

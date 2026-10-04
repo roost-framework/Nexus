@@ -146,6 +146,44 @@ extension Connection {
     public func putRespContentType(_ contentType: String) -> Connection {
         putRespHeader(.contentType, contentType)
     }
+
+    /// Returns all values for the given request header name.
+    ///
+    /// HTTP allows multiple fields with the same name (e.g., multiple
+    /// `Accept-Language` values). This returns every value in declaration order.
+    /// Returns an empty array when the header is absent.
+    ///
+    /// - Parameter name: The header field name.
+    /// - Returns: All values for the header, or an empty array.
+    public func getReqHeaders(_ name: HTTPField.Name) -> [String] {
+        request.headerFields[values: name]
+    }
+
+    /// Returns all values for the given request header name string.
+    ///
+    /// - Parameter name: The header field name string (case-insensitive).
+    /// - Returns: All values for the header, or an empty array.
+    public func getReqHeaders(_ name: String) -> [String] {
+        guard let field = HTTPField.Name(name) else { return [] }
+        return getReqHeaders(field)
+    }
+
+    /// Returns all values for the given response header name.
+    ///
+    /// - Parameter name: The header field name.
+    /// - Returns: All values for the header, or an empty array.
+    public func getRespHeaders(_ name: HTTPField.Name) -> [String] {
+        response.headerFields[values: name]
+    }
+
+    /// Returns all values for the given response header name string.
+    ///
+    /// - Parameter name: The header field name string (case-insensitive).
+    /// - Returns: All values for the header, or an empty array.
+    public func getRespHeaders(_ name: String) -> [String] {
+        guard let field = HTTPField.Name(name) else { return [] }
+        return getRespHeaders(field)
+    }
 }
 
 // MARK: - Status
@@ -166,20 +204,22 @@ extension Connection {
     }
 }
 
-// MARK: - Request Metadata
+// MARK: - Assigns
 
 extension Connection {
 
-    /// The host from the request's authority (e.g., `"example.com"`).
+    /// Returns a copy with `other` merged into `assigns`.
     ///
-    /// Extracted from ``request``'s `authority` field. Returns `nil` if
-    /// no authority is set.
-    public var host: String? {
-        request.authority
-    }
-
-    /// The URL scheme of the request (e.g., `"https"`).
-    public var scheme: String? {
-        request.scheme
+    /// Keys in `other` overwrite existing keys in `assigns`. Keys absent from
+    /// `other` are left unchanged.
+    ///
+    /// - Parameter other: The assigns to merge in.
+    /// - Returns: A new connection with the merged assigns.
+    public func mergeAssigns(_ other: [String: any Sendable]) -> Connection {
+        var copy = self
+        for (key, value) in other {
+            copy.assigns[key] = value
+        }
+        return copy
     }
 }

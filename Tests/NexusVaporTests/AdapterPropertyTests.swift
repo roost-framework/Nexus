@@ -474,7 +474,7 @@ struct AdapterPropertyTests {
             return Data()
         case .buffered(let data):
             return data
-        case .stream:
+        case .stream, .producer:
             // For property tests, we don't consume streams
             // In real tests, you'd collect the stream
             return Data()

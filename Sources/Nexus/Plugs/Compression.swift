@@ -1,3 +1,4 @@
+import CNexusZlib
 import Foundation
 import HTTPTypes
 
@@ -7,7 +8,7 @@ import HTTPTypes
 ///
 /// Registered as a `beforeSend` hook so compression runs after the full
 /// response body has been assembled by downstream plugs. Supported algorithms
-/// are checked in priority order; the first one the client accepts is used.
+/// are selected by client quality, then server preference order.
 ///
 /// Currently supports:
 /// - `gzip` — standard gzip format (RFC 1952)
@@ -18,7 +19,7 @@ import HTTPTypes
 /// let app = pipeline([compression, router])
 /// ```
 ///
-/// Only responses with a buffered body that exceeds `minimumLength` bytes
+/// Only responses with a buffered body of at least `minimumLength` bytes
 /// are compressed. Streaming bodies are passed through unchanged.
 public struct Compression: Sendable {
 
@@ -61,104 +62,72 @@ extension Compression: ModulePlug {
 
         return connection.registerBeforeSend { conn in
             guard
-                let acceptEncoding = conn.request.headerFields[.acceptEncoding],
                 case .buffered(let data) = conn.responseBody,
-                data.count >= minimumLength
-            else {
-                return conn
-            }
+                !data.isEmpty, data.count >= minimumLength,
+                conn.response.headerFields[.contentEncoding] == nil,
+                conn.response.headerFields[.contentRange] == nil,
+                conn.response.status.code >= 200,
+                ![204, 205, 206, 304].contains(conn.response.status.code),
+                !(conn.getRespHeader(.cacheControl) ?? "").split(separator: ",").contains(where: {
+                    $0.trimmingCharacters(in: .whitespaces).lowercased() == "no-transform"
+                })
+            else { return conn }
 
-            let encodingLower = acceptEncoding.lowercased()
-            for algorithm in algorithms {
-                guard encodingLower.contains(algorithm.rawValue) else { continue }
+            // Both compressed and identity representations vary with this request header.
+            let varied = conn.varying(on: "Accept-Encoding")
+            guard conn.request.method != .head,
+                let accept = conn.request.headerFields[.acceptEncoding]
+            else { return varied }
+            let preferences = HTTPPreference.parse(accept)
+            let wildcard = preferences.first { $0.value == "*" }?.quality ?? 0
+            let identity = preferences.first { $0.value == "identity" }?.quality
+            let candidates = algorithms.enumerated().compactMap { index, algorithm -> (Int, Algorithm, Double)? in
+                let quality = preferences.first { $0.value == algorithm.rawValue }?.quality ?? wildcard
+                guard quality > 0, quality >= (identity ?? 0) else { return nil }
+                return (index, algorithm, quality)
+            }.sorted { $0.2 == $1.2 ? $0.0 < $1.0 : $0.2 > $1.2 }
+            for (_, algorithm, _) in candidates {
                 guard let compressed = compress(data, using: algorithm) else { continue }
-
-                var result = conn
+                var result = varied
                 result.responseBody = .buffered(compressed)
-                if let encodingField = HTTPField.Name("Content-Encoding") {
-                    result.response.headerFields[encodingField] = algorithm.rawValue
-                }
-                // Remove Content-Length — it no longer reflects the compressed size.
-                // The server adapter will re-compute it from the body.
+                result.response.headerFields[.contentEncoding] = algorithm.rawValue
                 result.response.headerFields[.contentLength] = nil
+                // A strong validator for the original bytes is not valid for the encoded representation.
+                if let etag = result.response.headerFields[.eTag], !etag.hasPrefix("W/") {
+                    result.response.headerFields[.eTag] = "W/" + etag
+                }
                 return result
             }
-            return conn
+            return varied
         }
     }
 }
 
-// MARK: - Compression Helpers
-
-/// Compresses `data` using the specified algorithm.
-///
-/// - Parameters:
-///   - data: The data to compress.
-///   - algorithm: The target compression algorithm.
-/// - Returns: Compressed data, or `nil` if compression fails or the platform
-///   lacks compression support.
+/// Uses zlib's format support directly, identically on Apple platforms and Linux.
 private func compress(_ data: Data, using algorithm: Compression.Algorithm) -> Data? {
-    #if canImport(Compression)
-    switch algorithm {
-    case .deflate:
-        return (try? (data as NSData).compressed(using: .zlib)) as Data?
-
-    case .gzip:
-        // NSData.compressed(using: .zlib) produces zlib-wrapped DEFLATE.
-        // Strip the 2-byte zlib header and 4-byte Adler-32 trailer to obtain
-        // raw DEFLATE, then wrap it in the standard 10-byte gzip header and
-        // an 8-byte gzip trailer (CRC-32 + uncompressed size).
-        guard let zlibData = (try? (data as NSData).compressed(using: .zlib)) as Data?,
-              zlibData.count > 6 else {
-            return nil
-        }
-        let rawDeflate = zlibData.subdata(in: 2..<(zlibData.count - 4))
-        return makeGzip(rawDeflate: rawDeflate, original: data)
-    }
-    #else
-    // NSData.compressed(using:) is Apple-only. On Linux, compression is a
-    // no-op until a cross-platform zlib binding is added.
-    return nil
-    #endif
-}
-
-/// Wraps raw DEFLATE data in a gzip container (RFC 1952).
-private func makeGzip(rawDeflate: Data, original: Data) -> Data {
-    let crc = crc32(original)
-    let size = UInt32(original.count & 0xFFFF_FFFF)
-
-    var result = Data(capacity: 10 + rawDeflate.count + 8)
-    // Gzip header: magic (1F 8B), deflate method (08), no flags, zero mtime,
-    // default XFL, unknown OS (FF).
-    result.append(contentsOf: [0x1F, 0x8B, 0x08, 0x00,
-                                0x00, 0x00, 0x00, 0x00,
-                                0x00, 0xFF])
-    result.append(rawDeflate)
-    // CRC-32 of original data (little-endian).
-    result.append(contentsOf: littleEndianBytes(crc))
-    // Uncompressed size mod 2^32 (little-endian).
-    result.append(contentsOf: littleEndianBytes(size))
-    return result
-}
-
-/// Computes the CRC-32 checksum of `data` using the standard polynomial.
-private func crc32(_ data: Data) -> UInt32 {
-    var crc: UInt32 = 0xFFFF_FFFF
-    for byte in data {
-        crc ^= UInt32(byte)
-        for _ in 0..<8 {
-            crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB8_8320 : crc >> 1
+    guard data.count <= Int(UInt32.max) else { return nil }
+    var stream = z_stream()
+    let windowBits: Int32 = algorithm == .gzip ? 31 : 15
+    guard
+        deflateInit2_(
+            &stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, windowBits, 8,
+            Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)
+        ) == Z_OK
+    else { return nil }
+    defer { deflateEnd(&stream) }
+    let bound = deflateBound(&stream, uLong(data.count))
+    guard bound <= UInt32.max else { return nil }
+    var output = Data(count: Int(bound))
+    let status = data.withUnsafeBytes { input in
+        output.withUnsafeMutableBytes { buffer in
+            stream.next_in = UnsafeMutablePointer(mutating: input.bindMemory(to: UInt8.self).baseAddress)
+            stream.avail_in = uInt(data.count)
+            stream.next_out = buffer.bindMemory(to: UInt8.self).baseAddress
+            stream.avail_out = uInt(buffer.count)
+            return deflate(&stream, Z_FINISH)
         }
     }
-    return crc ^ 0xFFFF_FFFF
-}
-
-/// Returns the four little-endian bytes of a `UInt32`.
-private func littleEndianBytes(_ value: UInt32) -> [UInt8] {
-    [
-        UInt8(value & 0xFF),
-        UInt8((value >> 8) & 0xFF),
-        UInt8((value >> 16) & 0xFF),
-        UInt8((value >> 24) & 0xFF),
-    ]
+    guard status == Z_STREAM_END else { return nil }
+    output.count = Int(stream.total_out)
+    return output
 }

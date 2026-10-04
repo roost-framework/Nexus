@@ -5,91 +5,65 @@ All notable changes to Nexus are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-04-08
+## [Unreleased]
 
-### Major Release - Production-Ready HTTP Middleware Framework
-
-This release represents Nexus becoming a production-ready, feature-complete HTTP middleware framework with comprehensive server adapter support, advanced testing capabilities, and enterprise-grade reliability.
+## [2.0.0] - 2026-10-04
 
 ### Added
 
-#### Server Adapters
-
-- **NexusVapor adapter** (Sprint 9) -- Complete Vapor 4.x integration with full feature parity to NexusHummingbird. Implements `AsyncMiddleware` protocol, supports all connection transformations (request/response translation, pipeline execution, error handling per ADR-004), and includes WebSocket support via `VaporWebSocketAdapter`. Enables seamless integration with Vapor applications while maintaining Nexus's elegant middleware pipeline model.
-
-- **WebSocket parity** -- Both Hummingbird and Vapor adapters now support WebSocket connections through unified `WebSocketAdapter` interfaces. Identical functionality across both server backends including connection upgrades, message handling, and graceful closure. Developers can switch between Hummingbird and Vapor without changing application code.
-
-#### Real-Time Communication
-
-- **Server-Sent Events (SSE)** -- Native SSE support with `SSEEvent` model and `SSEEventSequence` for streaming text-based events. Automatic formatting per SSE specification with support for data, event type, event ID, and retry fields. Seamless integration with `ResponseBody.stream` for efficient server-to-client streaming. Perfect for live updates, notifications, and real-time dashboards.
-
-- **Enhanced WebSocket model** -- Complete WebSocket lifecycle management with connection upgrades, bidirectional messaging, ping/pong support, and graceful closure. Consistent API surface across Hummingbird and Vapor adapters.
-
-#### Testing & Quality Assurance
-
-- **Property-based testing** -- Integration with SwiftCheck framework for comprehensive property-based testing. Custom generators in `HTTPGenerators.swift` for HTTP requests, responses, headers, and bodies. Property tests verify fundamental invariants like "connection halted twice remains halted" and "response headers preserve original values". `PropertyTestHelpers.swift` bridges SwiftCheck with Swift Testing framework.
-
-- **95%+ test coverage** -- Achieved industry-leading test coverage with 65+ test files covering all core functionality, edge cases, and error conditions. Comprehensive test suite includes unit tests, integration tests, property-based tests, and adapter parity tests.
-
-- **Enhanced test helpers** -- Expanded `Connection.make()` factory methods with convenient overloads:
-  - `Connection.makeJSON()` -- JSON request body creation with automatic serialization
-  - `Connection.makeForm()` -- Form-encoded request body creation for testing form submissions
-  - `Connection.make()` -- Full customization with method, path, headers, body, scheme, authority, remote IP, and assigns
-  - Improved `TestConnection` with connection recycling for better performance
-
-#### Architecture & Design
-
-- **ADR-004 compliance verified** -- Error signalling architecture fully implemented and tested across all adapters. HTTP errors (4xx/5xx) correctly set status and body while infrastructure errors throw exceptions. Proper error propagation prevents silent failures and provides clear debugging information.
-
-- **ADR-006 compliance verified** -- BeforeSend hook architecture implemented and tested. Lifecycle hooks execute in correct order with proper error handling. Enables cross-cutting concerns like logging, metrics, and header manipulation.
-
-- **Performance benchmarking** -- Established performance baseline and benchmarks for middleware pipeline execution. Measurements show sub-microsecond overhead for plug execution and linear scaling with pipeline depth. Optimizations in connection value type reduce allocations and improve throughput.
-
-#### Developer Experience
-
-- **Unified adapter interface** -- Both Hummingbird and Vapor adapters implement identical patterns, making it trivial to switch server backends. Same `Connection` model, same plug composition, same testing approach.
-
-- **Enhanced documentation** -- Property-based testing guide, adapter integration documentation, and comprehensive ADR explanations. Migration journal tracks design decisions and architectural evolution.
-
-- **Improved diagnostics** -- Better error messages with context, connection state debugging helpers, and comprehensive test failure output.
+- `NexusVapor`, a Vapor 4 adapter for Nexus middleware, with HTTP request/response conversion and WebSocket integration.
+- SwiftCheck property generators and expanded `NexusTest` request builders.
+- Lazy `ResponseBody.producer` and `ResponseBodyWriter`, with transport backpressure and automatic
+  completion in both adapters. Real TCP tests cover slow readers, disconnects, file and SSE delivery,
+  producer errors, and suppression for HEAD/bodyless responses.
+- Connection metadata (`port`, `requestURL`, `requestPath`, `queryString`, `pathInfo`), multi-value header access,
+  header merge/prepend/update helpers, `mergeAssigns`, and separate `privateData` storage for framework metadata.
+- Session renewal, session getter overloads, persistence options, and `clearSession(drop: false)`.
+- Regression tests for compression wire formats, HTTP negotiation, session persistence, and actual Hummingbird
+  and Vapor request/response conversion.
 
 ### Changed
 
-- **Swift 6.3 required** -- Upgraded from Swift 6.0 to Swift 6.3 for latest language features and compiler improvements
-- **GitHub Actions CI improvements** -- Dropped setup-swift on macOS (using runner-bundled Swift), improved caching, and faster test execution
-- **Foundation imports** -- Added missing Foundation imports in test files for Linux compatibility
+- **Breaking:** `sendChunked` and `Connection.sseEvent` now use a scoped async writer. Add `try await`
+  to writes, replace SSE continuation `yield` with `write`, remove `finish()` and nested producer tasks,
+  and throw to abort. Both helpers halt the pipeline. `ResponseBody` switches must handle `.producer`.
+  Caller-supplied `.stream(AsyncThrowingStream)` remains supported with caller-owned lifecycle/buffering.
+- `sendFile` opens lazily, reads only after the previous write completes, and closes on stream exit.
+  Invalid chunk sizes are rejected. Opening/reading failures after preparation abort the stream.
+- Query and form parameters now use the last duplicate value; query `+` characters decode to spaces, matching
+  Plug. Callers needing all query values can use `queryParameters`. Combined parameters prioritize path, body,
+  then query values. These are observable changes from previous Nexus behavior.
+- Compression uses system zlib on Apple platforms and Linux. Debian/Ubuntu builds require `zlib1g-dev`.
 
 ### Fixed
 
-- **NamedPipeline compiler crash** -- Workaround for Swift 6.1.3 compiler crash in `NamedPipeline.call` (resolved in Swift 6.3)
-- **Test API corrections** -- Fixed `NamedPipelineTests` to use actual test APIs instead of disabled placeholders
-- **Linux compatibility** -- All features now work correctly on Linux with proper platform-specific code paths
+- Valid gzip and zlib-wrapped deflate output, quality-aware content negotiation, cache variation headers,
+  existing content encodings, and `no-transform` handling.
+- Repeated session plugs no longer overwrite changes or emit duplicate session cookies.
+- Favicon HEAD and conditional requests, deterministic ETags, configurable caching, and method filtering.
+- Timeout handling for zero, negative, non-finite, and extreme durations without trapping.
+- Vapor request query strings, IPv6 authority, repeated headers and cookies, precollected body size limits,
+  and propagation of streaming response failures.
+- Both adapters preserve HEAD and 304 representation lengths and suppress bodies for HEAD and bodyless statuses.
+- Linux-compatible test byte-buffer conversions and Swift Testing 6.0 assertions.
+- Linux CI installs zlib headers and propagates build/test process failures instead of masking exit codes.
+- Coverage reporting combines all test executables and profiles, uses matching LLVM tools on macOS and Linux,
+  and enforces the 85% threshold on unique executable source lines from LCOV.
+- Property tests now report SwiftCheck failures and exhausted generators through Swift Testing; corrected
+  expectations for empty HTTP field values and assigns whose generated keys coincide.
 
-### Performance
+### Migration and validation
 
-- **Sub-microsecond plug overhead** -- Each middleware plug adds less than 1 microsecond of latency
-- **Linear pipeline scaling** -- Performance scales linearly with pipeline depth, O(n) where n is number of plugs
-- **Zero-allocation connection mutations** -- Value type `Connection` design minimizes heap allocations
-- **Efficient streaming** -- SSE and WebSocket implementations use zero-copy streaming where possible
-
-### Migration from 1.x to 2.0
-
-This is a major release with breaking changes. Key migration steps:
-
-1. **Update Swift version** -- Ensure Swift 6.3+ is installed
-2. **Update dependencies** -- Run `swift package update` to get latest dependency versions
-3. **Review Vapor integration** -- If using NexusVapor, update to new `AsyncMiddleware` pattern
-4. **Update test imports** -- Some test APIs have changed; review breaking test changes
-5. **Verify platform support** -- Linux support is now first-class; test your target platforms
-
-### Technical Highlights
-
-- **65+ test files** with comprehensive coverage of all functionality
-- **Property-based tests** using SwiftCheck for invariant verification
-- **Adapter parity** between Hummingbird and Vapor ensures portability
-- **Production-ready** with 95%+ test coverage and comprehensive documentation
-- **Performance optimized** with benchmarked sub-microsecond middleware overhead
-- **Architecture decisions documented** in ADRs 001-006 for transparency
+- Update the package requirement to `from: "2.0.0"` and apply the streaming changes above.
+- Review duplicate query/form keys and plus decoding; use `queryParameters` when every value is needed.
+- Install zlib development headers on Linux. The manifest uses Swift tools 6.0.
+- All 967 tests passed on macOS with Swift 6.4 and Linux arm64 with Swift 6.0.3, including
+  live HTTP/1 TCP streaming checks on both adapters. Two intentional known-issue probes verify the
+  property-test assertion bridge.
+- Idle SSE producers should send heartbeat comments: disconnects are observed through failed writes,
+  and immediate cancellation while waiting on unrelated work is not guaranteed.
+- HTTP/2, TLS/proxy streaming, WebSocket behavioral parity, and load performance were not validated
+  by the streaming pilot.
 
 ## [1.3.0] - 2026-04-02
 
@@ -161,6 +135,7 @@ Initial stable release with 22+ built-in plugs, immutable `Connection` value typ
 pipeline composition (`pipe`, `pipeline`), `ConfigurablePlug` protocol, full session/cookie
 support, CSRF protection, CORS, BasicAuth, StaticFiles, BodyParser, and more.
 
+[Unreleased]: https://github.com/Spectro-ORM/Nexus/compare/2.0.0...HEAD
 [2.0.0]: https://github.com/Spectro-ORM/Nexus/compare/1.3.0...2.0.0
 [1.3.0]: https://github.com/Spectro-ORM/Nexus/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/Spectro-ORM/Nexus/compare/1.1.1...1.2.0

@@ -71,4 +71,8 @@ let app = pipeline([
 
 ### Streaming
 
+- ``ResponseBodyWriter``
+- ``Connection/sendChunked(status:handler:)``
+- ``Connection/sseEvent(contentType:body:)``
+- ``SSEEvent``
 - ``sseEvent(data:event:id:retry:)``

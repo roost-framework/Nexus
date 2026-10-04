@@ -79,12 +79,6 @@ extension Gen {
                 return Gen<String>.pure("/")
             }
 
-            // Generate segments
-            let segmentChars = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-                                "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "_"]
-            let segmentGen: Gen<String> = Gen<String>.fromElements(of: segmentChars)
-                .suchThat { !$0.isEmpty }
-
             // Generate array of segments and join
             let segmentsGen = Gen<Int>.choose((0, segmentCount)).map { count in
                 Array(repeating: "segment", count: count)
@@ -104,17 +98,6 @@ extension Gen {
             guard paramCount > 0 else {
                 return Gen<String>.pure("")
             }
-
-            let keyChars = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
-            let valueChars = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
-                             "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-            let paramGen: Gen<String> = Gen<String>.fromElements(of: keyChars)
-                .flatMap { key in
-                    Gen<String>.fromElements(of: valueChars)
-                        .map { value in
-                            "\(key)=\(value)"
-                        }
-                }
 
             let paramsGen = Gen<Int>.choose((0, paramCount)).map { count in
                 Array(repeating: "key=value", count: count)

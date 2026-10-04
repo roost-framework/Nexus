@@ -1,6 +1,7 @@
-import Testing
 import Foundation
 import HTTPTypes
+import Testing
+
 @testable import Nexus
 
 // MARK: - Chunked Response
@@ -18,48 +19,41 @@ struct ChunkedResponseTests {
         return Connection(request: request)
     }
 
-    @Test("test_sendChunked_setsStreamResponseBody")
-    func test_sendChunked_setsStreamResponseBody() {
-        let conn = makeConnection().sendChunked { writer in
-            writer.finish()
-        }
-        if case .stream = conn.responseBody {
+    @Test("test_sendChunked_setsProducerResponseBody")
+    func test_sendChunked_setsProducerResponseBody() {
+        let conn = makeConnection().sendChunked { _ in }
+        if case .producer = conn.responseBody {
             // expected
         } else {
-            Issue.record("Expected .stream responseBody")
+            Issue.record("Expected .producer responseBody")
         }
     }
 
     @Test("test_sendChunked_haltsConnection")
     func test_sendChunked_haltsConnection() {
-        let conn = makeConnection().sendChunked { writer in
-            writer.finish()
-        }
+        let conn = makeConnection().sendChunked { _ in }
         #expect(conn.isHalted == true)
     }
 
     @Test("test_sendChunked_setsStatus")
     func test_sendChunked_setsStatus() {
-        let conn = makeConnection().sendChunked(status: .created) { writer in
-            writer.finish()
-        }
+        let conn = makeConnection().sendChunked(status: .created) { _ in }
         #expect(conn.response.status == .created)
     }
 
     @Test("test_sendChunked_writesChunksInOrder")
     func test_sendChunked_writesChunksInOrder() async throws {
         let conn = makeConnection().sendChunked { writer in
-            writer.write("chunk1")
-            writer.write("chunk2")
-            writer.write("chunk3")
-            writer.finish()
+            try await writer.write("chunk1")
+            try await writer.write("chunk2")
+            try await writer.write("chunk3")
         }
-        guard case .stream(let stream) = conn.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case .producer(let stream) = conn.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
         var chunks: [String] = []
-        for try await data in stream {
+        for data in try await collectProducer(stream) {
             if let str = String(data: data, encoding: .utf8) {
                 chunks.append(str)
             }
@@ -67,18 +61,17 @@ struct ChunkedResponseTests {
         #expect(chunks == ["chunk1", "chunk2", "chunk3"])
     }
 
-    @Test("test_sendChunked_finishTerminatesStream")
-    func test_sendChunked_finishTerminatesStream() async throws {
+    @Test("test_sendChunked_returnTerminatesStream")
+    func test_sendChunked_returnTerminatesStream() async throws {
         let conn = makeConnection().sendChunked { writer in
-            writer.write("only")
-            writer.finish()
+            try await writer.write("only")
         }
-        guard case .stream(let stream) = conn.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case .producer(let stream) = conn.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
         var count = 0
-        for try await _ in stream {
+        for _ in try await collectProducer(stream) {
             count += 1
         }
         #expect(count == 1)
@@ -88,16 +81,16 @@ struct ChunkedResponseTests {
     func test_sendChunked_errorTerminatesStream() async {
         struct TestError: Error {}
         let conn = makeConnection().sendChunked { writer in
-            writer.write("before error")
-            writer.finish(throwing: TestError())
+            try await writer.write("before error")
+            throw TestError()
         }
-        guard case .stream(let stream) = conn.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case .producer(let stream) = conn.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
         var receivedError = false
         do {
-            for try await _ in stream {}
+            for _ in try await collectProducer(stream) {}
         } catch {
             receivedError = true
         }
@@ -108,15 +101,14 @@ struct ChunkedResponseTests {
     func test_sendChunked_writeData() async throws {
         let payload = Data([0x48, 0x65, 0x6C, 0x6C, 0x6F])  // "Hello"
         let conn = makeConnection().sendChunked { writer in
-            writer.write(payload)
-            writer.finish()
+            try await writer.write(payload)
         }
-        guard case .stream(let stream) = conn.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case .producer(let stream) = conn.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
         var received = Data()
-        for try await data in stream {
+        for data in try await collectProducer(stream) {
             received.append(data)
         }
         #expect(received == payload)

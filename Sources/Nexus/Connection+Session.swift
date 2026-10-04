@@ -13,6 +13,9 @@ extension Connection {
     /// The assigns key that tracks whether the session was read or written.
     static let sessionTouchedKey = "_nexus_session_touched"
 
+    /// Whether session writes should be suppressed for this response.
+    static let sessionIgnoreKey = "_nexus_session_ignore"
+
     /// The current session dictionary, or an empty dictionary if no session
     /// has been established.
     var sessionData: [String: String] {
@@ -25,6 +28,19 @@ extension Connection {
     /// - Returns: The value associated with the key, or `nil` if not present.
     public func getSession(_ key: String) -> String? {
         sessionData[key]
+    }
+
+    /// Returns all session values, or an empty dictionary before fetching.
+    /// - Returns: The current session dictionary.
+    public func getSession() -> [String: String] { sessionData }
+
+    /// Reads a session value, returning `defaultValue` when the key is absent.
+    /// - Parameters:
+    ///   - key: The session key.
+    ///   - defaultValue: The fallback value.
+    /// - Returns: The session value or the supplied fallback.
+    public func getSession(_ key: String, default defaultValue: String) -> String {
+        sessionData[key] ?? defaultValue
     }
 
     /// Writes a key–value pair to the session.
@@ -60,11 +76,48 @@ extension Connection {
     /// `Set-Cookie` header with `Max-Age=0` to instruct the browser to
     /// remove the cookie.
     ///
+    /// Pass `drop: false` for Plug's `clear_session` semantics: clear the data
+    /// while retaining an empty session cookie. The default preserves Nexus's
+    /// existing logout behavior of deleting the cookie.
+    /// - Parameter drop: Whether to delete the cookie, rather than write an empty session.
     /// - Returns: A new connection with the session cleared.
-    public func clearSession() -> Connection {
+    public func clearSession(drop: Bool = true) -> Connection {
         assign(key: Connection.sessionKey, value: [String: String]())
-            .assign(key: Connection.sessionDropKey, value: true)
+            .assign(key: Connection.sessionDropKey, value: drop)
             .assign(key: Connection.sessionTouchedKey, value: true)
+    }
+
+    /// Marks the session for renewal, triggering the session plug to re-issue
+    /// the session cookie with a fresh expiry on the next response.
+    ///
+    /// This cookie store has no server-side session ID to rotate. Renewal
+    /// reissues the signed data; it does not invalidate previously issued tokens.
+    /// Has no effect if no session plug is in the pipeline.
+    ///
+    /// - Returns: A new connection with the session marked as touched.
+    public func renewSession() -> Connection {
+        assign(key: Connection.sessionTouchedKey, value: true)
+            .assign(key: Connection.sessionDropKey, value: false)
+            .assign(key: Connection.sessionIgnoreKey, value: false)
+    }
+
+    /// Configures session persistence for this response.
+    /// `ignore` suppresses writes; `drop` deletes the cookie; `renew` reissues it.
+    /// When several options are true, renew takes precedence over drop, then ignore, as in Plug.
+    /// Changes remain readable within the request even when persistence is ignored.
+    /// - Parameters:
+    ///   - renew: Reissue the signed session cookie.
+    ///   - drop: Delete the session cookie.
+    ///   - ignore: Suppress session cookie writes for this response.
+    /// - Returns: A new connection with persistence configured.
+    public func configureSession(renew: Bool = false, drop: Bool = false, ignore: Bool = false) -> Connection {
+        if renew { return renewSession() }
+        if drop {
+            return assign(key: Self.sessionDropKey, value: true)
+                .assign(key: Self.sessionIgnoreKey, value: false)
+                .assign(key: Self.sessionTouchedKey, value: true)
+        }
+        return ignore ? assign(key: Self.sessionIgnoreKey, value: true) : self
     }
 
     // MARK: - Session Fetch Helpers
@@ -81,7 +134,7 @@ extension Connection {
     ///
     /// Replicates the read phase of ``sessionPlug(_:)`` for cases where
     /// session loading must happen conditionally (e.g., only on authenticated
-    /// routes). If the cookie is absent, expired, or has an invalid signature,
+    /// routes). If the cookie is absent or has an invalid signature,
     /// an empty session is stored — this method never halts the pipeline.
     ///
     /// To write the session back to a cookie, the connection must still pass
@@ -98,6 +151,7 @@ extension Connection {
     /// - Parameter config: The session configuration.
     /// - Returns: A new connection with session data stored in assigns.
     public func fetchSession(_ config: SessionConfig) -> Connection {
+        guard !isSessionFetched else { return self }
         let session: [String: String]
         if let cookieValue = reqCookies[config.cookieName],
            let payloadData = MessageSigning.verify(token: cookieValue, secret: config.secret),

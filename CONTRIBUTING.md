@@ -8,13 +8,13 @@ conventions and review expectations for this project.
 ## Development Setup
 
 ```bash
-git clone https://github.com/alembic-labs/swift-nexus.git
-cd swift-nexus
+git clone https://github.com/Spectro-ORM/Nexus.git
+cd Nexus
 swift build
 swift test
 ```
 
-Requires Swift 6.1 or later.
+Requires Swift 6.0.3 or later.
 
 ---
 

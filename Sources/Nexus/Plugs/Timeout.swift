@@ -33,9 +33,16 @@ public struct Timeout: Sendable {
 
     /// Creates a `Timeout` with the given duration in seconds.
     ///
-    /// - Parameter seconds: Maximum allowed execution time in seconds.
+    /// - Parameter seconds: Maximum allowed execution time in seconds. Nonpositive
+    ///   values and NaN expire immediately; values beyond UInt64 nanoseconds saturate.
     public init(seconds: Double) {
-        self.nanoseconds = UInt64(seconds * 1_000_000_000)
+        if seconds.isNaN || seconds <= 0 {
+            self.nanoseconds = 0
+        } else if seconds >= Double(UInt64.max) / 1_000_000_000 {
+            self.nanoseconds = .max
+        } else {
+            self.nanoseconds = UInt64(seconds * 1_000_000_000)
+        }
     }
 
     /// Returns a plug that runs `plug` subject to this timeout.
@@ -43,13 +50,19 @@ public struct Timeout: Sendable {
     /// The wrapped plug and a sleep task race. Whichever finishes first wins:
     /// - If `plug` finishes first, its result is returned and the sleep is cancelled.
     /// - If the sleep finishes first, ``TimeoutError`` is thrown and `plug` is cancelled.
+    /// Cancellation is cooperative: structured concurrency waits for the plug to
+    /// exit. Blocking work that ignores cancellation can delay the timeout error.
     ///
     /// - Parameter plug: The plug or pipeline to wrap.
     /// - Returns: A new plug that throws ``TimeoutError`` on timeout.
     public func wrap(_ plug: @escaping Plug) -> Plug {
         let ns = nanoseconds
         return { conn in
-            try await withThrowingTaskGroup(of: Connection.self) { group in
+            guard !conn.isHalted else { return conn }
+            try Task.checkCancellation()
+            guard ns > 0 else { throw TimeoutError() }
+            return try await withThrowingTaskGroup(of: Connection.self) { group in
+                defer { group.cancelAll() }
                 group.addTask {
                     try await plug(conn)
                 }
@@ -57,8 +70,7 @@ public struct Timeout: Sendable {
                     try await Task.sleep(nanoseconds: ns)
                     throw TimeoutError()
                 }
-                let result = try await group.next()!
-                group.cancelAll()
+                guard let result = try await group.next() else { throw CancellationError() }
                 return result
             }
         }

@@ -17,7 +17,7 @@ extension Connection {
 
     /// Query parameters parsed from the request URI, preserving duplicate keys.
     ///
-    /// Unlike ``queryParams`` (which returns only the first value for duplicate
+    /// Unlike ``queryParams`` (which returns only the last value for duplicate
     /// keys), `queryParameters` preserves **all** values as an array.
     ///
     /// Both keys and values are percent-decoded.
@@ -35,9 +35,9 @@ extension Connection {
         return parseMultiValueQueryString(queryString)
     }
 
-    /// Combined path and query parameters.
+    /// Combined path, body, and query parameters.
     ///
-    /// Path parameters take precedence over query parameters with the same key.
+    /// Path parameters take precedence over body parameters, then query parameters.
     /// Each value is wrapped in a single-element array for a uniform interface.
     ///
     /// ```swift
@@ -47,6 +47,9 @@ extension Connection {
     /// ```
     public var parameters: [String: [String]] {
         var combined = queryParameters
+        for (key, value) in bodyParams {
+            combined[key] = [value]
+        }
         for (key, value) in params {
             combined[key] = [value]
         }
@@ -55,12 +58,12 @@ extension Connection {
 
     /// Returns the first value of the named parameter.
     ///
-    /// Checks path parameters first, then the first query parameter value.
+    /// Checks path parameters, then body parameters, then the first query parameter value.
     ///
     /// - Parameter name: The parameter name.
     /// - Returns: The parameter value, or `nil` if not present.
     public func getParameter(_ name: String) -> String? {
-        params[name] ?? queryParameters[name]?.first
+        params[name] ?? bodyParams[name] ?? queryParameters[name]?.first
     }
 
     /// Returns all values of the named query parameter.
@@ -101,10 +104,10 @@ extension Connection {
 private func parseMultiValueQueryString(_ queryString: String) -> [String: [String]] {
     var result: [String: [String]] = [:]
     for pair in queryString.split(separator: "&", omittingEmptySubsequences: true) {
-        let parts = pair.split(separator: "=", maxSplits: 1)
+        let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
         guard !parts.isEmpty else { continue }
-        let rawKey = String(parts[0])
-        let rawValue = parts.count > 1 ? String(parts[1]) : ""
+        let rawKey = String(parts[0]).replacingOccurrences(of: "+", with: " ")
+        let rawValue = parts.count > 1 ? String(parts[1]).replacingOccurrences(of: "+", with: " ") : ""
         let key = rawKey.removingPercentEncoding ?? rawKey
         let value = rawValue.removingPercentEncoding ?? rawValue
         result[key, default: []].append(value)

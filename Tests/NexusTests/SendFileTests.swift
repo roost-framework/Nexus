@@ -1,6 +1,7 @@
-import Testing
 import Foundation
 import HTTPTypes
+import Testing
+
 @testable import Nexus
 
 @Suite("Send File")
@@ -27,14 +28,14 @@ struct SendFileTests {
         return url.path
     }
 
-    @Test("test_sendFile_setsStreamResponseBody")
-    func test_sendFile_setsStreamResponseBody() throws {
+    @Test("test_sendFile_setsProducerResponseBody")
+    func test_sendFile_setsProducerResponseBody() throws {
         let path = try createTempFile(content: Data("hello".utf8))
         let conn = try makeConnection().sendFile(path: path)
-        if case .stream = conn.responseBody {
+        if case .producer = conn.responseBody {
             // expected
         } else {
-            Issue.record("Expected .stream responseBody")
+            Issue.record("Expected .producer responseBody")
         }
     }
 
@@ -92,12 +93,12 @@ struct SendFileTests {
         let content = "Hello, Nexus!"
         let path = try createTempFile(content: Data(content.utf8))
         let conn = try makeConnection().sendFile(path: path)
-        guard case .stream(let stream) = conn.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case .producer(let stream) = conn.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
         var received = Data()
-        for try await data in stream {
+        for data in try await collectProducer(stream) {
             received.append(data)
         }
         #expect(String(data: received, encoding: .utf8) == content)
@@ -109,13 +110,13 @@ struct SendFileTests {
         let content = Data(repeating: 0x41, count: chunkSize * 3 + 100)
         let path = try createTempFile(content: content)
         let conn = try makeConnection().sendFile(path: path, chunkSize: chunkSize)
-        guard case .stream(let stream) = conn.responseBody else {
-            Issue.record("Expected .stream responseBody")
+        guard case .producer(let stream) = conn.responseBody else {
+            Issue.record("Expected .producer responseBody")
             return
         }
         var chunkCount = 0
         var received = Data()
-        for try await data in stream {
+        for data in try await collectProducer(stream) {
             chunkCount += 1
             received.append(data)
         }

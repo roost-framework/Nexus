@@ -10,7 +10,7 @@ extension Connection {
     /// split-and-decode algorithm as ``queryParams``, with the addition of
     /// `+`-as-space decoding per the HTML specification.
     ///
-    /// For duplicate keys the first value wins, matching Elixir Plug's
+    /// For duplicate keys the last value wins, matching Elixir Plug's
     /// `fetch_query_params` semantics.
     ///
     /// Returns an empty dictionary when the request body is `.empty` or

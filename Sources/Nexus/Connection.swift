@@ -45,6 +45,10 @@ public struct Connection: Sendable {
     /// Keys are `String`s; values are any `Sendable` type.
     public var assigns: [String: any Sendable]
 
+    /// Framework metadata, isolated from application ``assigns``.
+    /// Existing Nexus assigns keys remain supported for source compatibility.
+    public var privateData: [String: any Sendable]
+
     // MARK: - Lifecycle Hooks
 
     /// Callbacks invoked in LIFO order just before the response is delivered.
@@ -69,6 +73,7 @@ public struct Connection: Sendable {
         self.responseBody = .empty
         self.isHalted = false
         self.assigns = [:]
+        self.privateData = [:]
         self.beforeSend = []
     }
 }

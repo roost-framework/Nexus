@@ -1,63 +1,6 @@
 import Foundation
 import HTTPTypes
 
-// MARK: - SSE Stream Helper
-
-/// A sequence that yields Server-Sent Events as UTF-8 encoded data chunks.
-///
-/// This type bridges SSE's text-based protocol with the `ResponseBody.stream`
-/// API, which expects `Data` chunks. Each event is formatted via the
-/// ``sseEvent(data:event:id:retry:)`` function and encoded as UTF-8.
-@usableFromInline
-internal struct SSEEventSequence: Sendable, AsyncSequence {
-    public typealias Element = Data
-
-    /// The underlying asynchronous sequence of SSE event components.
-    @usableFromInline internal let base: AsyncStream<SSEEvent>
-
-    /// Creates a sequence from an async stream of SSE events.
-    ///
-    /// - Parameter base: An async stream yielding `SSEEvent` values.
-    @inlinable
-    init(base: AsyncStream<SSEEvent>) {
-        self.base = base
-    }
-
-    /// Creates an iterator over the SSE event sequence.
-    ///
-    /// - Returns: An async iterator that yields UTF-8 encoded event data.
-    @inlinable
-    public func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(base: base.makeAsyncIterator())
-    }
-
-    /// An async iterator that converts SSE events to UTF-8 data chunks.
-    public struct AsyncIterator: AsyncIteratorProtocol {
-        /// The underlying iterator from the `AsyncStream<SSEEvent>`.
-        @usableFromInline internal var base: AsyncStream<SSEEvent>.Iterator
-
-        /// Creates an iterator from the base stream's iterator.
-        ///
-        /// - Parameter base: The iterator from the `AsyncStream<SSEEvent>`.
-        @inlinable
-        init(base: AsyncStream<SSEEvent>.Iterator) {
-            self.base = base
-        }
-
-        /// Advances the iterator and returns the next UTF-8 encoded event.
-        ///
-        /// - Returns: UTF-8 encoded `Data` containing the formatted SSE event,
-        ///   or `nil` when the stream terminates.
-        @inlinable
-        public mutating func next() async throws -> Data? {
-            guard let event = await base.next() else {
-                return nil
-            }
-            return event.formatted().data(using: .utf8)
-        }
-    }
-}
-
 // MARK: - SSE Event Model
 
 /// A single Server-Sent Event with optional fields.
@@ -126,84 +69,34 @@ public struct SSEEvent: Sendable {
 // MARK: - Connection Extension
 
 extension Connection {
-
-    /// Returns a connection configured for Server-Sent Events streaming.
+    /// Returns a halted connection that produces Server-Sent Events.
     ///
-    /// This method configures the response with the correct `Content-Type`
-    /// (`text/event-stream`), sets cache-control headers to prevent buffering,
-    /// and establishes a streaming response body from an async sequence of
-    /// ``SSEEvent`` values.
-    ///
-    /// The continuation-based API allows the caller to emit events from any
-    /// async context (e.g., tasks, actors, or background operations). Call
-    /// `continuation.finish()` when the stream is complete.
-    ///
-    /// - Parameter contentType: The `Content-Type` header value. Defaults to
-    ///   `"text/event-stream; charset=utf-8"`. Override only if your client
-    ///   requires a different charset.
-    /// - Parameter body: A closure that receives an `AsyncStream<SSEEvent>.Continuation`
-    ///   for emitting events. Call `continuation.yield(_:)` to send events and
-    ///   `continuation.finish()` to terminate the stream.
-    /// - Returns: A modified ``Connection`` with the SSE response configuration.
-    ///
-    /// ## Example
+    /// The adapter runs `body` while delivering the response. Await each write;
+    /// returning finishes the stream and throwing aborts it. For idle streams,
+    /// send periodic heartbeat comments (`": heartbeat\n\n"`) so a failed
+    /// transport write can detect a disconnected client. Do not spawn a task.
     ///
     /// ```swift
-    /// return connection.sseEvent { continuation in
-    ///     Task {
-    ///         // Emit events
-    ///         continuation.yield(SSEEvent(data: "hello", event: "message"))
-    ///         try await Task.sleep(for: .seconds(1))
-    ///         continuation.yield(SSEEvent(data: "world", event: "message"))
-    ///
-    ///         // Terminate the stream
-    ///         continuation.finish()
-    ///     }
+    /// connection.sseEvent { writer in
+    ///     try await writer.write(SSEEvent(data: "hello", event: "message"))
+    ///     try await Task.sleep(for: .seconds(1))
+    ///     try await writer.write(SSEEvent(data: "world", event: "message"))
     /// }
     /// ```
     ///
-    /// ## HTTP Headers
-    ///
-    /// The following headers are set automatically:
-    ///
-    /// - `Content-Type: text/event-stream; charset=utf-8` (or custom value)
-    /// - `Cache-Control: no-cache, no-transform` — disables proxy and browser caching
-    /// - `X-Accel-Buffering: no` — disables nginx buffering (when behind nginx)
-    ///
-    /// These headers ensure events are delivered to the client immediately
-    /// without intermediate buffering.
-    @inlinable
+    /// - Parameters:
+    ///   - contentType: The event stream media type and charset.
+    ///   - body: An async producer that writes events, text, or raw data.
+    /// - Returns: A halted connection with caching and proxy buffering disabled.
     public func sseEvent(
         contentType: String = "text/event-stream; charset=utf-8",
-        body: @escaping @Sendable (_ continuation: AsyncStream<SSEEvent>.Continuation) -> Void
+        body: @escaping @Sendable (inout any ChunkWriter) async throws -> Void
     ) -> Connection {
-        let (stream, continuation) = AsyncStream<SSEEvent>.makeStream()
-
-        // Spawn the producer task
-        Task {
-            body(continuation)
-        }
-
-        var copy = self
-        copy.response.headerFields[.contentType] = contentType
+        var copy = putRespContentType(contentType)
         copy.response.headerFields[.cacheControl] = "no-cache, no-transform"
-        copy.response.headerFields[.init("X-Accel-Buffering")!] = "no"
-        copy.responseBody = .stream(
-            AsyncThrowingStream { continuation in
-                var iterator = SSEEventSequence(base: stream).makeAsyncIterator()
-
-                Task {
-                    do {
-                        while let data = try await iterator.next() {
-                            continuation.yield(data)
-                        }
-                        continuation.finish()
-                    } catch {
-                        continuation.finish(throwing: error)
-                    }
-                }
-            }
-        )
-        return copy
+        if let name = HTTPField.Name("X-Accel-Buffering") {
+            copy.response.headerFields[name] = "no"
+        }
+        return copy.sendChunked(handler: body)
     }
 }

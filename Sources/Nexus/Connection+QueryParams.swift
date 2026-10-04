@@ -5,7 +5,7 @@ extension Connection {
     /// Query parameters parsed from the request URL.
     ///
     /// Parses the query string portion of ``request``'s path on each access.
-    /// For duplicate keys, the first value wins (matching Elixir Plug's
+    /// For duplicate keys, the last value wins (matching Elixir Plug's
     /// `fetch_query_params` semantics). Both keys and values are
     /// percent-decoded.
     ///
@@ -16,6 +16,6 @@ extension Connection {
             return [:]
         }
         let queryString = path[path.index(after: queryStart)...]
-        return parseURLEncoded(queryString, decodePlus: false)
+        return parseURLEncoded(queryString, decodePlus: true)
     }
 }

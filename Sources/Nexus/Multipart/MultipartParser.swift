@@ -164,10 +164,6 @@ enum MultipartParser {
     /// Parses part headers into a lowercase-keyed dictionary.
     private static func parsePartHeaders(_ headerString: String) -> [String: String] {
         var headers: [String: String] = [:]
-        let lines = headerString.split(omittingEmptySubsequences: true) {
-            $0 == "\r\n" || $0 == "\n"
-        }
-        // Re-split by actual line breaks
         let headerLines = headerString
             .replacingOccurrences(of: "\r\n", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: true)

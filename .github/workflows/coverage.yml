@@ -66,10 +66,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install LLVM tools
+      - name: Install coverage tools and zlib headers
         run: |
           apt-get update
-          apt-get install -y llvm-runtime
+          apt-get install -y python3 zlib1g-dev
 
       - name: Generate coverage data
         run: |
@@ -77,15 +77,11 @@ jobs:
 
       - name: Export coverage
         run: |
-          llvm-cov export \
-            .build/*/swift-package-tests \
-            --format=lcov \
-            --ignore-filename-regex='Tests/|\.build/|Checkouts/' \
-            > coverage.lcov
+          Scripts/check-coverage.sh
 
       - name: Upload coverage to artifacts
         uses: actions/upload-artifact@v4
         with:
           name: coverage-linux
-          path: coverage.lcov
+          path: .build/coverage/
           retention-days: 30

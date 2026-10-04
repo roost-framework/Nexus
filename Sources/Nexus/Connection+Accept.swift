@@ -10,30 +10,18 @@ extension Connection {
     /// - Parameter mimeType: The MIME type to check, e.g. `"text/html"`.
     public func accepts(_ mimeType: String) -> Bool {
         guard let accept = getReqHeader(.accept) else { return true }
-        return accept.contains(mimeType) || accept.contains("*/*")
+        guard !accept.isEmpty else { return true }
+        return (MediaPreferences(accept).preference(for: mimeType)?.quality ?? 0) > 0
     }
 
     /// Returns `true` if the client prefers HTML over JSON.
     ///
-    /// Browsers send `Accept: text/html,...` first. API clients (curl, Postman,
-    /// fetch with `Content-Type: application/json`) send `application/json` first
-    /// or omit `text/html` entirely.
-    ///
-    /// The preference is determined by which type appears first in the `Accept`
-    /// header. When the header is missing or contains only `*/*` without an
-    /// explicit `application/json` before it, returns `true` — matching
-    /// browser-default behavior where the caller accepts anything and HTML
-    /// is the sensible default for `respondTo`.
+    /// Uses quality values, media-range specificity, and then client declaration
+    /// order. HTML is the fallback when neither representation is acceptable;
+    /// use `ContentNegotiation` when the pipeline must return 406 instead.
     public var prefersHTML: Bool {
         guard let accept = getReqHeader(.accept) else { return true }
-        let htmlRange = accept.range(of: "text/html")
-        let jsonRange = accept.range(of: "application/json")
-        switch (htmlRange, jsonRange) {
-        case let (h?, j?): return h.lowerBound < j.lowerBound
-        case (.some, nil):  return true
-        case (nil, .some):  return false
-        case (nil, nil):    return true  // */* or unknown → HTML default
-        }
+        return MediaPreferences(accept).bestMatch(in: ["text/html", "application/json"]) != "application/json"
     }
 
     /// Responds with HTML or JSON depending on what the client prefers.

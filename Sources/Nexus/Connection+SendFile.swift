@@ -8,8 +8,9 @@ extension Connection {
     /// Returns a halted connection that streams the contents of a file as
     /// the response body.
     ///
-    /// The file is read in chunks using `FileHandle`, which avoids loading the
-    /// entire file into memory at once. The `Content-Type` header is inferred
+    /// The file is opened when the adapter sends the body. Each chunk is read
+    /// only after the previous write completes, and the file is closed on
+    /// completion, cancellation, or write failure. `Content-Type` is inferred
     /// from the file extension when not provided explicitly.
     ///
     /// > Important: This method does **not** validate the path against
@@ -26,20 +27,25 @@ extension Connection {
     ///   - contentType: The MIME type. When `nil`, inferred from the file
     ///     extension via a built-in mapping. Defaults to `nil`.
     ///   - chunkSize: The number of bytes per stream chunk. Defaults to
-    ///     65 536 (64 KB).
+    ///     65 536 (64 KB). Must be positive.
     /// - Returns: A halted connection with a streaming response body and
     ///   the `Content-Type` header set.
     /// - Throws: ``NexusHTTPError`` with `.notFound` if the file does not
-    ///   exist, or `.internalServerError` if the file cannot be opened.
+    ///   exist, or `.internalServerError` for an invalid chunk size or an
+    ///   unreadable file. Errors opening or reading the file during delivery
+    ///   terminate the response stream.
     public func sendFile(
         path: String,
         contentType: String? = nil,
         chunkSize: Int = 65_536
     ) throws -> Connection {
+        guard chunkSize > 0 else {
+            throw NexusHTTPError(.internalServerError, message: "File chunk size must be positive")
+        }
         guard FileManager.default.fileExists(atPath: path) else {
             throw NexusHTTPError(.notFound, message: "File not found")
         }
-        guard let fileHandle = FileHandle(forReadingAtPath: path) else {
+        guard FileManager.default.isReadableFile(atPath: path) else {
             throw NexusHTTPError(.internalServerError, message: "Cannot open file")
         }
 
@@ -51,28 +57,17 @@ extension Connection {
             resolvedContentType = mimeType(forExtension: ext)
         }
 
-        let stream = AsyncThrowingStream<Data, any Error> { continuation in
-            Task {
-                defer { fileHandle.closeFile() }
-                do {
-                    while true {
-                        guard let data = try fileHandle.read(upToCount: chunkSize),
-                              !data.isEmpty else { break }
-                        let result = continuation.yield(data)
-                        if case .terminated = result { break }
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
+        return putRespContentType(resolvedContentType).sendChunked { writer in
+            try Task.checkCancellation()
+            let fileHandle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+            defer { try? fileHandle.close() }
+            while true {
+                try Task.checkCancellation()
+                guard let data = try fileHandle.read(upToCount: chunkSize),
+                    !data.isEmpty
+                else { return }
+                try await writer.write(data)
             }
         }
-
-        var copy = self
-        copy.response.status = .ok
-        copy.response.headerFields[.contentType] = resolvedContentType
-        copy.responseBody = .stream(stream)
-        copy.isHalted = true
-        return copy
     }
 }

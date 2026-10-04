@@ -1,99 +1,43 @@
 # Nexus Scripts
 
-This directory contains utility scripts for development, testing, and coverage reporting.
-
-## Coverage Scripts
-
-### `generate-coverage.sh`
-Generates code coverage data using Swift's built-in coverage tools.
+Run the full test suite with coverage, then enforce the 85% source line threshold:
 
 ```bash
 ./Scripts/generate-coverage.sh
-```
-
-**What it does:**
-- Cleans previous build artifacts
-- Builds tests with code coverage enabled
-- Runs tests with coverage instrumentation
-
-**Output:**
-- Coverage data in `.build/` directory
-
-### `coverage-report.sh`
-Generates HTML coverage reports and summary statistics.
-
-```bash
-./Scripts/coverage-report.sh
-```
-
-**What it does:**
-- Exports coverage data to LCOV format
-- Generates HTML report (if `genhtml` is available)
-- Displays coverage summary statistics
-- Verifies coverage meets minimum threshold (85%)
-
-**Output:**
-- HTML report: `.build/coverage/html/index.html`
-- LCOV data: `.build/coverage/coverage.lcov`
-- Summary: `.build/coverage/summary.txt`
-
-**Dependencies:**
-- `genhtml` (optional, for HTML reports): `brew install lcov`
-
-### `check-coverage.sh`
-Checks if coverage meets the minimum threshold (85%).
-
-```bash
 ./Scripts/check-coverage.sh
 ```
 
-**What it does:**
-- Generates coverage data if needed
-- Extracts coverage percentage
-- Compares against threshold (85%)
-- Fails with exit code 1 if below threshold
+`generate-coverage.sh` forwards arguments to `swift test`, so `--jobs 8` can limit
+build parallelism. SwiftPM refreshes coverage profiles on each test run; an
+incremental build is sufficient. Use the full suite for the release gate.
 
-**Exit codes:**
-- 0: Coverage meets or exceeds threshold
-- 1: Coverage below threshold or error
+`check-coverage.sh` merges every raw profile from the current SwiftPM coverage
+directory and loads all test executables, including separate macOS test bundles.
+It counts unique executable lines under `Sources/` from LLVM's LCOV records.
+A line shared by nested Swift closures is counted once, matching HTML coverage
+reports rather than LLVM JSON summaries that can count overlapping regions.
+Dependencies and tests are excluded; all five Swift source targets must appear.
+Missing profiles, missing targets, export failures, and coverage below 85% fail
+the check. LLVM tools come from the selected Swift toolchain on both platforms.
 
-## Usage Examples
+To generate a report without enforcing the threshold:
 
-### Generate coverage report locally
 ```bash
-swift test --enable-code-coverage
-./Scripts/coverage-report.sh
-open .build/coverage/html/index.html
-```
-
-### Verify coverage before commit
-```bash
-swift test --enable-code-coverage
-./Scripts/check-coverage.sh
-```
-
-### Run specific test suites with coverage
-```bash
-swift test --filter NexusTests --enable-code-coverage
 ./Scripts/coverage-report.sh
 ```
 
-## CI Integration
+Both commands write:
 
-These scripts are integrated into GitHub Actions workflows:
+- `.build/coverage/coverage.lcov` — line and function data for coverage tools.
+- `.build/coverage/summary.txt` — source line coverage by target and overall.
+- `.build/coverage/summary.json` — machine-readable counts and percentage.
+- `.build/coverage/coverage.profdata` — merged profiles.
+- `.build/coverage/html/index.html` — optional HTML when `genhtml` is installed.
 
-- `.github/workflows/coverage.yml` - Full coverage reporting with PR comments
-- `.github/workflows/ci.yml` - Basic coverage check in CI
+Python 3.9 or later and the Swift toolchain are required. Install `lcov` for
+optional HTML (`brew install lcov` on macOS). A filtered test run is useful for
+investigation but does not represent full-suite coverage.
 
-## Troubleshooting
-
-### "genhtml not found"
-Install `lcov` package: `brew install lcov`
-
-### "Could not find test bundle"
-Run tests with coverage first: `swift test --enable-code-coverage`
-
-### Coverage percentage seems low
-- Ensure all test files are included in the test target
-- Check that test execution completes successfully
-- Verify that `--enable-code-coverage` flag is used
+GitHub Actions uses the same scripts in `.github/workflows/ci.yml` and
+`.github/workflows/coverage.yml`. The Coverage workflow uploads macOS and Linux
+reports as artifacts.

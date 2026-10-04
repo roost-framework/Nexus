@@ -35,10 +35,10 @@ struct QueryParamsTests {
         #expect(conn.queryParams["limit"] == "10")
     }
 
-    @Test("test_connection_queryParams_firstValueWinsForDuplicates")
-    func test_connection_queryParams_firstValueWinsForDuplicates() {
+    @Test("test_connection_queryParams_lastValueWinsForDuplicates")
+    func test_connection_queryParams_lastValueWinsForDuplicates() {
         let conn = makeConnection(path: "/search?q=first&q=second")
-        #expect(conn.queryParams["q"] == "first")
+        #expect(conn.queryParams["q"] == "second")
     }
 
     @Test("test_connection_queryParams_percentDecodesKeysAndValues")
