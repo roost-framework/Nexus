@@ -135,9 +135,9 @@ Initial stable release with 22+ built-in plugs, immutable `Connection` value typ
 pipeline composition (`pipe`, `pipeline`), `ConfigurablePlug` protocol, full session/cookie
 support, CSRF protection, CORS, BasicAuth, StaticFiles, BodyParser, and more.
 
-[Unreleased]: https://github.com/Spectro-ORM/Nexus/compare/2.0.0...HEAD
-[2.0.0]: https://github.com/Spectro-ORM/Nexus/compare/1.3.0...2.0.0
-[1.3.0]: https://github.com/Spectro-ORM/Nexus/compare/1.2.0...1.3.0
-[1.2.0]: https://github.com/Spectro-ORM/Nexus/compare/1.1.1...1.2.0
-[1.1.0]: https://github.com/Spectro-ORM/Nexus/compare/1.0.0...1.1.0
-[1.0.0]: https://github.com/Spectro-ORM/Nexus/releases/tag/1.0.0
+[Unreleased]: https://github.com/roost-framework/Nexus/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/roost-framework/Nexus/compare/1.3.0...2.0.0
+[1.3.0]: https://github.com/roost-framework/Nexus/compare/1.2.0...1.3.0
+[1.2.0]: https://github.com/roost-framework/Nexus/compare/1.1.1...1.2.0
+[1.1.0]: https://github.com/roost-framework/Nexus/compare/1.0.0...1.1.0
+[1.0.0]: https://github.com/roost-framework/Nexus/releases/tag/1.0.0

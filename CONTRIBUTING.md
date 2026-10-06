@@ -8,7 +8,7 @@ conventions and review expectations for this project.
 ## Development Setup
 
 ```bash
-git clone https://github.com/Spectro-ORM/Nexus.git
+git clone https://github.com/roost-framework/Nexus.git
 cd Nexus
 swift build
 swift test

@@ -91,7 +91,7 @@ Add Nexus to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/Spectro-ORM/Nexus.git", from: "2.0.0"),
+    .package(url: "https://github.com/roost-framework/Nexus.git", from: "2.0.0"),
 ]
 ```
 
@@ -113,7 +113,7 @@ You can import each target independently. If you only need the pipeline and do n
 ### 2. Clone for Development
 
 ```bash
-git clone https://github.com/Spectro-ORM/Nexus.git
+git clone https://github.com/roost-framework/Nexus.git
 cd Nexus
 swift build
 swift test
