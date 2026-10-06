@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f0f4fa" />
+    <meta
+      name="description"
+      content="Nexus is a composable HTTP middleware pipeline for Swift, inspired by Elixir's Plug: value-type connections, routing, built-in plugs, and tests without a server. Part of the Roost family."
+    />
+    <title>Nexus. — One connection. Many small steps.</title>
+    <link rel="canonical" href="https://roost-framework.github.io/Nexus/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Nexus. — One connection. Many small steps." />
+    <meta
+      property="og:description"
+      content="Composable HTTP middleware for Swift, inspired by Elixir's Plug."
+    />
+    <meta property="og:url" content="https://roost-framework.github.io/Nexus/" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" type="image/svg+xml" href="assets/mark.svg" />
+    <link
+      rel="preload"
+      href="assets/fonts/manrope.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <a class="brand" href="./" aria-label="Nexus home"
+        ><img src="assets/mark.svg" width="42" height="42" alt="" /><span
+          >nexus<span class="accent">.</span></span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#example">Example</a>
+        <a href="#install">Install</a>
+        <a class="nav-github" href="https://github.com/roost-framework/Nexus"
+          >GitHub <span aria-hidden="true">↗</span></a
+        >
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <a class="development" href="#family"
+            ><span class="status-dot" aria-hidden="true"></span> Part of the
+            Roost family <span aria-hidden="true">↓</span></a
+          >
+          <h1 id="hero-title">
+            One connection.<br />Many small steps<span class="accent">.</span>
+          </h1>
+          <p class="hero-description">Composable HTTP middleware for Swift.</p>
+          <p class="hero-detail">
+            Inspired by Elixir's Plug. Each step takes a connection and returns
+            a new one, so a request reads from top to bottom.
+          </p>
+          <div class="hero-actions">
+            <a class="button" href="#install"
+              >Get started <span aria-hidden="true">↓</span></a
+            >
+            <a class="text-link" href="https://github.com/roost-framework/Nexus"
+              >Explore the source <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <p class="hero-note">Nexus 2.0 · Swift 6 · Hummingbird or Vapor</p>
+        </div>
+        <div class="hello-window code-window">
+          <div class="window-bar">
+            <span
+              ><span class="file-dot" aria-hidden="true"></span> App.swift</span
+            ><button
+              class="copy-button"
+              data-copy="hero-code"
+              hidden
+              aria-label="Copy the Nexus pipeline example"
+            >
+              Copy <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <pre
+            tabindex="0"
+            aria-label="A Nexus pipeline with a router"
+          ><code id="hero-code"><span class="syn-key">import</span> Nexus
+<span class="syn-key">import</span> NexusRouter
+
+<span class="syn-key">let</span> router = <span class="syn-type">Router</span> {
+    <span class="syn-call">GET</span>(<span class="syn-string">"/hello/:name"</span>) { conn <span class="syn-key">in</span>
+        conn.<span class="syn-call">text</span>(<span class="syn-string">"Hello, \(conn.params["name"] ?? "world")!"</span>)
+    }
+}
+
+<span class="syn-key">let</span> app = <span class="syn-call">buildPipeline</span> {
+    <span class="syn-call">requestId</span>()
+    <span class="syn-call">requestLogger</span>()
+    router
+}</code></pre>
+          <div class="response-line">
+            <span>GET /hello/nexus</span><span class="response-status">200 OK</span>
+          </div>
+          <div class="hello-result">
+            <img src="assets/mark.svg" width="42" height="42" alt="" /><span
+              >Hello, nexus!</span
+            >
+          </div>
+          <p class="window-caption">Three plugs. One response.</p>
+        </div>
+      </section>
+      <section id="family" class="stack-strip wrap" aria-label="The Roost family">
+        <p class="stack-intro">
+          Part of Roost.<br /><strong>One Swift stack.</strong>
+        </p>
+        <a href="https://roost-framework.github.io/swift-roost/"
+          ><span class="stack-name"
+            >Roost <span aria-hidden="true">↗</span></span
+          ><span class="stack-detail"
+            >The web framework <span class="version">2.0</span></span
+          ></a
+        >
+        <a href="https://roost-framework.github.io/Spectro/"
+          ><span class="stack-name"
+            >Spectro <span aria-hidden="true">↗</span></span
+          ><span class="stack-detail"
+            >PostgreSQL &amp; migrations <span class="version">2.1</span></span
+          ></a
+        >
+        <a href="https://roost-framework.github.io/ESW/"
+          ><span class="stack-name">ESW <span aria-hidden="true">↗</span></span
+          ><span class="stack-detail"
+            >HTML, compiled to Swift <span class="version">1.5</span></span
+          ></a
+        >
+      </section>
+      <section
+        id="features"
+        class="framework-section wrap section-space"
+        aria-labelledby="features-title"
+      >
+        <div class="section-heading">
+          <p class="eyebrow">WHAT YOU GET</p>
+          <h2 id="features-title">
+            Small pieces.<br />Clear flow<span class="accent">.</span>
+          </h2>
+        </div>
+        <div class="framework-content">
+          <div class="principles">
+            <article>
+              <h3>Plugs on value types.</h3>
+              <p>
+                A plug is a function from connection to connection. Every step
+                returns a new copy and never mutates shared state.
+              </p>
+            </article>
+            <article>
+              <h3>Compose, route, halt.</h3>
+              <p>
+                Chain plugs into pipelines, route with path parameters and
+                scopes, and halt early instead of throwing HTTP errors.
+              </p>
+            </article>
+          </div>
+          <div class="principles">
+            <article>
+              <h3>Batteries included.</h3>
+              <p>
+                Signed sessions, CSRF protection, static files, CORS, Basic
+                auth, compression, request IDs, and logging ship as plugs.
+              </p>
+            </article>
+            <article>
+              <h3>Test without a server.</h3>
+              <p>
+                NexusTest builds a connection in one line, so you call any plug
+                or pipeline directly and check the result.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section
+        id="example"
+        class="workflow-section section-space"
+        aria-labelledby="example-title"
+      >
+        <div class="wrap">
+          <div class="section-heading heading-row">
+            <div>
+              <p class="eyebrow">A CLOSER LOOK</p>
+              <h2 id="example-title">
+                Plug, route,<br />test<span class="accent">.</span>
+              </h2>
+            </div>
+            <p>Three short files. The whole idea.</p>
+          </div>
+          <div class="code-tour">
+            <div class="tour-tabs" aria-label="Explore Nexus code">
+              <a class="tour-tab" href="#plug-panel" data-panel="plug-panel"
+                ><span>01</span> The plug</a
+              >
+              <a class="tour-tab" href="#router-panel" data-panel="router-panel"
+                ><span>02</span> The router</a
+              >
+              <a class="tour-tab" href="#test-panel" data-panel="test-panel"
+                ><span>03</span> The test</a
+              >
+            </div>
+            <section id="plug-panel" class="tour-panel">
+              <div class="tour-explanation">
+                <h3>Halt, don't throw.</h3>
+                <p>
+                  Without a token, the plug answers 401 and halts, so later
+                  plugs are skipped. With one, it assigns the user to a new
+                  copy of the connection.
+                </p>
+                <span class="source-label">RequireToken.swift</span>
+              </div>
+              <div class="tour-code">
+                <button
+                  class="copy-button light-copy"
+                  data-copy="plug-code"
+                  hidden
+                  aria-label="Copy plug example"
+                >
+                  Copy
+                </button>
+                <pre tabindex="0"><code id="plug-code"><span class="light-key">import</span> Nexus
+
+<span class="light-key">enum</span> CurrentUser: AssignKey { <span class="light-key">typealias</span> Value = String }
+
+<span class="light-key">let</span> requireToken: Plug = { conn <span class="light-key">in</span>
+    <span class="light-key">guard let</span> auth = conn.getReqHeader(<span class="light-string">"Authorization"</span>),
+          auth.hasPrefix(<span class="light-string">"Bearer "</span>) <span class="light-key">else</span> {
+        <span class="light-key">return</span> conn.respond(status: .unauthorized, body: .string(<span class="light-string">"Missing token"</span>))
+    }
+    <span class="light-key">let</span> token = String(auth.dropFirst(<span class="light-string">"Bearer "</span>.count))
+    <span class="light-key">return</span> conn.assign(CurrentUser.<span class="light-key">self</span>, value: token)
+}</code></pre>
+              </div>
+            </section>
+            <section id="router-panel" class="tour-panel">
+              <div class="tour-explanation">
+                <h3>Routes are plugs too.</h3>
+                <p>
+                  Path parameters arrive on the connection. Scopes run their own
+                  plugs first, so the admin routes sit behind Basic auth.
+                </p>
+                <span class="source-label">API.swift</span>
+              </div>
+              <div class="tour-code">
+                <button
+                  class="copy-button light-copy"
+                  data-copy="router-code"
+                  hidden
+                  aria-label="Copy router example"
+                >
+                  Copy
+                </button>
+                <pre tabindex="0"><code id="router-code"><span class="light-key">import</span> Nexus
+<span class="light-key">import</span> NexusRouter
+
+<span class="light-key">struct</span> User: Encodable, Sendable { <span class="light-key">let</span> id: String; <span class="light-key">let</span> name: String }
+
+<span class="light-key">let</span> api = Router {
+    GET(<span class="light-string">"/users/:id"</span>) { conn <span class="light-key">in</span>
+        <span class="light-key">let</span> id = conn.params[<span class="light-string">"id"</span>] ?? <span class="light-string">""</span>
+        <span class="light-key">return try</span> conn.json(value: User(id: id, name: <span class="light-string">"Ada"</span>))
+    }
+    scope(<span class="light-string">"/admin"</span>, through: [basicAuth { _, pass <span class="light-key">in</span> pass == <span class="light-string">"s3cret"</span> }]) {
+        GET(<span class="light-string">"/stats"</span>) { conn <span class="light-key">in try</span> conn.json(value: [<span class="light-string">"users"</span>: 1]) }
+    }
+}
+
+<span class="light-key">let</span> app = pipeline([requestId(), requestLogger(), api.asPlug()])</code></pre>
+              </div>
+            </section>
+            <section id="test-panel" class="tour-panel">
+              <div class="tour-explanation">
+                <h3>No port required.</h3>
+                <p>
+                  NexusTest builds the connection. Call the plug or the whole
+                  app as a function and check what comes back.
+                </p>
+                <span class="source-label">AppTests.swift</span>
+              </div>
+              <div class="tour-code">
+                <button
+                  class="copy-button light-copy"
+                  data-copy="test-code"
+                  hidden
+                  aria-label="Copy test example"
+                >
+                  Copy
+                </button>
+                <pre tabindex="0"><code id="test-code"><span class="light-key">import</span> Testing
+<span class="light-key">import</span> Nexus
+<span class="light-key">import</span> NexusTest
+
+@Test <span class="light-key">func</span> rejectsMissingToken() <span class="light-key">async throws</span> {
+    <span class="light-key">let</span> result = <span class="light-key">try await</span> requireToken(TestConnection.build(path: <span class="light-string">"/me"</span>))
+    #expect(result.isHalted)
+    #expect(result.response.status == .unauthorized)
+}
+
+@Test <span class="light-key">func</span> greetsByName() <span class="light-key">async throws</span> {
+    <span class="light-key">let</span> result = <span class="light-key">try await</span> app(TestConnection.build(path: <span class="light-string">"/hello/nexus"</span>))
+    #expect(result.response.status == .ok)
+    #expect(result.requestId != <span class="light-key">nil</span>)
+}</code></pre>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section
+        id="install"
+        class="wrap section-space"
+        aria-labelledby="install-title"
+      >
+        <div class="section-heading">
+          <p class="eyebrow">INSTALL</p>
+          <h2 id="install-title">
+            Add it to<br />your package<span class="accent">.</span>
+          </h2>
+        </div>
+        <div class="workflow-grid">
+          <div class="workflow-copy">
+            <h3>Pick the pieces you need.</h3>
+            <p>
+              Nexus is the core. Add NexusRouter for routing, NexusHummingbird
+              or NexusVapor to serve requests, and NexusTest to your test
+              target.
+            </p>
+            <p>Swift 6.0+ · macOS 14+, iOS 17+ or Linux</p>
+            <a class="text-link" href="https://github.com/roost-framework/Nexus#readme"
+              >Read the guide <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <div class="code-window terminal-window">
+            <div class="window-bar">
+              <span
+                ><span class="file-dot" aria-hidden="true"></span>
+                Package.swift</span
+              ><button
+                class="copy-button"
+                data-copy="install-code"
+                hidden
+                aria-label="Copy package dependency"
+              >
+                Copy <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <pre
+              tabindex="0"
+              aria-label="Nexus package dependency"
+            ><code id="install-code">.<span class="syn-call">package</span>(url: <span class="syn-string">"https://github.com/roost-framework/Nexus.git"</span>, from: <span class="syn-string">"2.0.0"</span>)
+
+<span class="syn-comment">// in your target's dependencies</span>
+.<span class="syn-call">product</span>(name: <span class="syn-string">"Nexus"</span>, package: <span class="syn-string">"Nexus"</span>),
+.<span class="syn-call">product</span>(name: <span class="syn-string">"NexusRouter"</span>, package: <span class="syn-string">"Nexus"</span>),
+.<span class="syn-call">product</span>(name: <span class="syn-string">"NexusHummingbird"</span>, package: <span class="syn-string">"Nexus"</span>)
+
+<span class="syn-comment">// in your test target</span>
+.<span class="syn-call">product</span>(name: <span class="syn-string">"NexusTest"</span>, package: <span class="syn-string">"Nexus"</span>)</code></pre>
+          </div>
+        </div>
+      </section>
+      <section class="closing wrap" aria-label="Explore Nexus on GitHub">
+        <p>Build a pipeline<br />you can read<span class="accent">.</span></p>
+        <a class="button" href="https://github.com/roost-framework/Nexus"
+          >Explore Nexus on GitHub <span aria-hidden="true">↗</span></a
+        >
+      </section>
+    </main>
+    <footer class="site-footer wrap">
+      <a class="brand" href="./" aria-label="Nexus home"
+        ><span>nexus<span class="accent">.</span></span></a
+      >
+      <p>Plug-shaped. Written in Swift.</p>
+      <div>
+        <a href="https://github.com/roost-framework/Nexus">GitHub ↗</a
+        ><a href="https://roost-framework.github.io/swift-roost/">Roost ↗</a
+        ><a href="#install">Install</a><a href="#main">Back to top ↑</a>
+      </div>
+    </footer>
+    <p
+      id="site-announcement"
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+    ></p>
+  </body>
+</html>
