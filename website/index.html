@@ -307,8 +307,8 @@
     #expect(result.response.status == .unauthorized)
 }
 
-@Test <span class="light-key">func</span> greetsByName() <span class="light-key">async throws</span> {
-    <span class="light-key">let</span> result = <span class="light-key">try await</span> app(TestConnection.build(path: <span class="light-string">"/hello/nexus"</span>))
+@Test <span class="light-key">func</span> findsUser() <span class="light-key">async throws</span> {
+    <span class="light-key">let</span> result = <span class="light-key">try await</span> app(TestConnection.build(path: <span class="light-string">"/users/42"</span>))
     #expect(result.response.status == .ok)
     #expect(result.requestId != <span class="light-key">nil</span>)
 }</code></pre>
