@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nexus now requires Swift 6.1 (swift-tools-version 6.1), the first version with package traits. Swift 6.0 projects
   keep resolving Nexus 2.0.x.
 
+### Fixed
+
+- `HTTPRequest.arbitrary` no longer generates an authority made only of whitespace or control characters, which
+  HTTPTypes stores as empty, breaking the generator's non-empty authority guarantee for some seeds.
+
 ## [2.0.0] - 2026-10-04
 
 ### Added

@@ -143,7 +143,8 @@ extension HTTPRequest: @retroactive Arbitrary {
     public static var arbitrary: Gen<HTTPRequest> {
         return HTTPRequest.Method.arbitrary.flatMap { method in
             Gen<String>.fromElements(of: ["http", "https"]).flatMap { scheme in
-                String.arbitrary.suchThat { !$0.isEmpty }.flatMap { authority in
+                // HTTPTypes trims whitespace and replaces control characters, so require a visible character.
+                String.arbitrary.suchThat { $0.contains { $0.isLetter || $0.isNumber } }.flatMap { authority in
                     Gen<String>.httpPath.flatMap { path in
                         // Generate 0-5 headers
                         Gen<Int>.choose((0, 5)).flatMap { headerCount in
