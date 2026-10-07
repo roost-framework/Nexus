@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -15,6 +15,11 @@ let package = Package(
         .library(name: "NexusHummingbird", targets: ["NexusHummingbird"]),
         .library(name: "NexusVapor", targets: ["NexusVapor"]),
         .library(name: "NexusTest", targets: ["NexusTest"]),
+    ],
+    traits: [
+        // Disable default traits (`traits: []`) to skip fetching Vapor when you only use the Hummingbird adapter.
+        .trait(name: "Vapor", description: "The NexusVapor adapter and its Vapor dependency."),
+        .default(enabledTraits: ["Vapor"]),
     ],
     dependencies: [
         .package(
@@ -99,7 +104,7 @@ let package = Package(
             dependencies: [
                 "Nexus",
                 "NexusRouter",
-                .product(name: "Vapor", package: "vapor"),
+                .product(name: "Vapor", package: "vapor", condition: .when(traits: ["Vapor"])),
             ]
         ),
 
@@ -155,7 +160,7 @@ let package = Package(
                 "NexusRouter",
                 "NexusHummingbird",
                 "NexusVapor",
-                .product(name: "Vapor", package: "vapor"),
+                .product(name: "Vapor", package: "vapor", condition: .when(traits: ["Vapor"])),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
             ],
             exclude: ["README.md", "INTEGRATION_TEST_SUMMARY.md"]
@@ -169,7 +174,7 @@ let package = Package(
                 "NexusVapor",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
-                .product(name: "Vapor", package: "vapor"),
+                .product(name: "Vapor", package: "vapor", condition: .when(traits: ["Vapor"])),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
@@ -184,7 +189,7 @@ let package = Package(
         //         "Nexus",
         //         "NexusRouter",
         //         "NexusVapor",
-        //         .product(name: "Vapor", package: "vapor"),
+        //         .product(name: "Vapor", package: "vapor", condition: .when(traits: ["Vapor"])),
         //         .product(name: "HTTPTypes", package: "swift-http-types"),
         //     ]
         // ),

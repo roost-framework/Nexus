@@ -67,7 +67,7 @@ A composable HTTP middleware pipeline library for Swift, inspired by [Elixir's P
 
 | Component | Technology |
 |-----------|------------|
-| **Language** | Swift 6.0.3+ |
+| **Language** | Swift 6.1+ |
 | **Swift Tools Version** | 6.0 |
 | **Platforms** | macOS 14+, iOS 17+, Linux |
 | **HTTP Primitives** | [swift-http-types](https://github.com/apple/swift-http-types) (Apple) |
@@ -78,7 +78,7 @@ A composable HTTP middleware pipeline library for Swift, inspired by [Elixir's P
 
 ## Prerequisites
 
-- **Swift 6.0.3** or later. Install via [Xcode](https://developer.apple.com/xcode/), [swiftly](https://github.com/swiftlang/swiftly), or the [official Docker image](https://hub.docker.com/_/swift) (`swift:6.0`).
+- **Swift 6.1** or later. Install via [Xcode](https://developer.apple.com/xcode/), [swiftly](https://github.com/swiftlang/swiftly), or the [official Docker image](https://hub.docker.com/_/swift) (`swift:6.1`).
 - **macOS 14+** (Sonoma) or **Linux** (Ubuntu 22.04+ recommended).
 - Compression uses system zlib. Apple SDKs include it; on Debian/Ubuntu install `zlib1g-dev` before building
   (`apt-get install zlib1g-dev`). Swift Package Manager resolves the Swift dependencies.
@@ -91,8 +91,14 @@ Add Nexus to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/roost-framework/Nexus.git", from: "2.0.0"),
+    .package(url: "https://github.com/roost-framework/Nexus.git", from: "2.1.0"),
 ]
+```
+
+`NexusVapor` and its Vapor dependency sit behind the `Vapor` trait, which is on by default. If you only use the Hummingbird adapter, disable default traits so SwiftPM never fetches Vapor:
+
+```swift
+.package(url: "https://github.com/roost-framework/Nexus.git", from: "2.1.0", traits: []),
 ```
 
 Then add the targets you need:

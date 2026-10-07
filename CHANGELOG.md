@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-07
+
+### Changed
+
+- `NexusVapor` and its Vapor dependency now sit behind the `Vapor` package trait, enabled by default. Packages that only
+  use the Hummingbird adapter can depend on Nexus with `traits: []`, and SwiftPM then skips fetching Vapor and its
+  dependencies (about 75 MB of sources).
+- Nexus now requires Swift 6.1 (swift-tools-version 6.1), the first version with package traits. Swift 6.0 projects
+  keep resolving Nexus 2.0.x.
+
 ## [2.0.0] - 2026-10-04
 
 ### Added
@@ -135,7 +145,8 @@ Initial stable release with 22+ built-in plugs, immutable `Connection` value typ
 pipeline composition (`pipe`, `pipeline`), `ConfigurablePlug` protocol, full session/cookie
 support, CSRF protection, CORS, BasicAuth, StaticFiles, BodyParser, and more.
 
-[Unreleased]: https://github.com/roost-framework/Nexus/compare/2.0.0...HEAD
+[Unreleased]: https://github.com/roost-framework/Nexus/compare/2.1.0...HEAD
+[2.1.0]: https://github.com/roost-framework/Nexus/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/roost-framework/Nexus/compare/1.3.0...2.0.0
 [1.3.0]: https://github.com/roost-framework/Nexus/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/roost-framework/Nexus/compare/1.1.1...1.2.0
