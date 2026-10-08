@@ -6,7 +6,7 @@ extension Connection {
 
     /// Merged text parameters from URL-encoded forms and multipart fields.
     ///
-    /// Populated by the ``bodyParser()`` plug. Returns an empty dictionary
+    /// Populated by the ``bodyParser(_:)`` plug. Returns an empty dictionary
     /// if the plug has not run or the `Content-Type` was not a form type.
     public var bodyParams: [String: String] {
         self[BodyParamsKey.self] ?? [:]
@@ -14,7 +14,7 @@ extension Connection {
 
     /// Uploaded files from a multipart request.
     ///
-    /// Populated by the ``bodyParser()`` plug. Returns an empty dictionary
+    /// Populated by the ``bodyParser(_:)`` plug. Returns an empty dictionary
     /// if the plug has not run or the request was not multipart.
     public var uploadedFiles: [String: MultipartFile] {
         self[UploadedFilesKey.self] ?? [:]
@@ -32,7 +32,7 @@ extension Connection {
 
     /// The parsed JSON body as a ``JSONValue`` for dynamic access.
     ///
-    /// Populated by the ``bodyParser()`` plug for JSON requests.
+    /// Populated by the ``bodyParser(_:)`` plug for JSON requests.
     /// Returns `nil` if the plug has not run or the request was not JSON.
     public var parsedJSON: JSONValue? {
         self[ParsedJSONKey.self]

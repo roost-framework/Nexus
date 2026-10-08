@@ -15,21 +15,21 @@ public enum RemoteIPKey: AssignKey {
 
 /// Typed key for merged text parameters from body parsing.
 ///
-/// Populated by ``bodyParser()`` for URL-encoded and multipart requests.
+/// Populated by ``bodyParser(_:)`` for URL-encoded and multipart requests.
 public enum BodyParamsKey: AssignKey {
     public typealias Value = [String: String]
 }
 
 /// Typed key for uploaded files from multipart body parsing.
 ///
-/// Populated by ``bodyParser()`` for multipart requests.
+/// Populated by ``bodyParser(_:)`` for multipart requests.
 public enum UploadedFilesKey: AssignKey {
     public typealias Value = [String: MultipartFile]
 }
 
 /// Typed key for the parsed JSON body.
 ///
-/// Populated by ``bodyParser()`` for JSON requests.
+/// Populated by ``bodyParser(_:)`` for JSON requests.
 public enum ParsedJSONKey: AssignKey {
     public typealias Value = JSONValue
 }

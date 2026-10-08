@@ -30,7 +30,7 @@ extension Connection {
     /// The current session dictionary, or `nil` if no session plug has run.
     ///
     /// For mutating the session, prefer ``getSession(_:)``,
-    /// ``putSession(key:value:)``, and ``clearSession()``.
+    /// ``putSession(key:value:)``, and ``clearSession(drop:)``.
     public var session: [String: String]? {
         self[SessionKey.self] ?? assigns[Connection.sessionKey] as? [String: String]
     }

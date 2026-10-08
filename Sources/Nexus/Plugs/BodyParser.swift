@@ -1,7 +1,7 @@
 import Foundation
 import HTTPTypes
 
-/// The set of content types the ``bodyParser()`` plug will parse.
+/// The set of content types the ``bodyParser(_:)`` plug will parse.
 public enum BodyParserType: Sendable, Hashable {
     /// Parse `application/json` bodies into ``ParsedJSONKey``.
     case json
@@ -11,7 +11,7 @@ public enum BodyParserType: Sendable, Hashable {
     case multipart
 }
 
-/// Configuration for the ``bodyParser()`` plug.
+/// Configuration for the ``bodyParser(_:)`` plug.
 public struct BodyParserConfig: Sendable {
 
     /// Content types to parse. Defaults to all supported types.

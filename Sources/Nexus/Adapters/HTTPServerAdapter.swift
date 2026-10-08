@@ -32,7 +32,7 @@
 /// try await adapter.run()
 /// ```
 ///
-/// > Note: The existing ``NexusHummingbirdAdapter`` (`NexusHummingbird` target)
+/// > Note: The existing `NexusHummingbirdAdapter` (`NexusHummingbird` target)
 /// > implements this pattern using Hummingbird's `HTTPResponder`. Refer to its
 /// > source for a complete example.
 ///

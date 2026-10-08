@@ -5,7 +5,7 @@ import Foundation
 /// Applies a time limit to a plug or pipeline.
 ///
 /// If the wrapped plug does not complete within the configured duration, the
-/// task is cancelled and ``TimeoutError`` is thrown. Combine with ``onError``
+/// task is cancelled and ``TimeoutError`` is thrown. Combine with ``onError(_:handler:)``
 /// to return a friendly response:
 ///
 /// ```swift
