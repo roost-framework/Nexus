@@ -58,7 +58,7 @@ let app = pipeline([
 ### Built-in Plugs
 
 - ``requestLogger(_:)``
-- ``requestId(generator:)``
+- ``requestId(generator:headerName:)``
 - ``corsPlug(_:)``
 - ``basicAuth(realm:validate:)``
 - ``sslRedirect(host:)``

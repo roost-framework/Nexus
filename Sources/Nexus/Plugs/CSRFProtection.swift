@@ -59,7 +59,7 @@ public struct CSRFConfig: Sendable {
 /// To embed the token in a response (for forms or JSON APIs), use
 /// ``csrfToken(conn:config:)``.
 ///
-/// - Parameter config: The CSRF configuration. Defaults to ``CSRFConfig()``.
+/// - Parameter config: The CSRF configuration. Defaults to `CSRFConfig()`.
 /// - Returns: A plug that enforces CSRF protection.
 public func csrfProtection(_ config: CSRFConfig = CSRFConfig()) -> Plug {
     { conn in
@@ -110,7 +110,7 @@ public func csrfProtection(_ config: CSRFConfig = CSRFConfig()) -> Plug {
 /// - Parameters:
 ///   - conn: The current connection (must have passed through
 ///     ``sessionPlug(_:)``).
-///   - config: The CSRF configuration. Defaults to ``CSRFConfig()``.
+///   - config: The CSRF configuration. Defaults to `CSRFConfig()`.
 /// - Returns: A tuple of `(token, connection)`. The connection may have
 ///   a newly generated token stored in its session.
 public func csrfToken(

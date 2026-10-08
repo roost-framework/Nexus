@@ -11,7 +11,7 @@ extension Connection {
 
     /// The remote IP address of the client, if available.
     ///
-    /// Populated by the server adapter (e.g., ``NexusHummingbirdAdapter``).
+    /// Populated by the server adapter (e.g., `NexusHummingbirdAdapter`).
     /// Returns `nil` when the adapter does not provide this information
     /// or in testing contexts where no real connection exists.
     ///

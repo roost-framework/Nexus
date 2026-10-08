@@ -98,7 +98,7 @@ The plug includes multiple layers of path traversal protection:
 ### MIME Types
 
 Content types are inferred automatically from file extensions using the same
-``mimeType(forExtension:)`` function used by
+internal MIME type table used by
 ``Connection/sendFile(path:contentType:chunkSize:)``.
 
 ## Topics
