@@ -2,6 +2,17 @@
 
 A composable HTTP middleware pipeline library for Swift, inspired by [Elixir's Plug](https://hexdocs.pm/plug/readme.html). Nexus gives you a functional, value-type-based approach to building HTTP applications where middleware ("plugs") are plain functions that transform a `Connection` value flowing through a pipeline.
 
+## Documentation
+
+Browse the [documentation for the latest release](https://roost-framework.github.io/Nexus/docs/latest/),
+or [pick a release](https://roost-framework.github.io/Nexus/docs/). Each release has its
+own guides and API references for `Nexus`, `NexusRouter`, `NexusHummingbird`,
+`NexusVapor`, and `NexusTest`. Build a browsable DocC site for the current checkout with:
+
+```sh
+python3 Scripts/build_docs.py
+```
+
 ## Table of Contents
 
 - [Key Features](#key-features)
